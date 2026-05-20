@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+*.sqlite
+*.sqlite3
+*.db
+.DS_Store
+.vscode/
+.idea/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

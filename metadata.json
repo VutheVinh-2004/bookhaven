@@ -1,0 +1,5 @@
+{
+  "name": "BookHaven - Hệ Thống Bán Sách Trực Tuyến",
+  "description": "Website bán sách trực tuyến với phân quyền 3 cấp (User, Admin, Super Admin), quản lý kho sách, giỏ hàng và đặt hàng.",
+  "requestFramePermissions": []
+}
