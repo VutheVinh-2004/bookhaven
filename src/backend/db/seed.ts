@@ -1,13 +1,6 @@
 import db, { initDb } from "./index.ts";
 import bcrypt from "bcryptjs";
-import { booksData } from "./booksData.ts";
-import { booksData2 } from "./booksData2.ts";
-import { booksData3 } from "./booksData3.ts";
-import { booksData4 } from "./booksData4.ts";
-import { booksData5 } from "./booksData5.ts";
-import { booksData6 } from "./booksData6.ts";
-import { booksData7 } from "./booksData7.ts";
-import { booksData8 } from "./booksData8.ts";
+import { booksDataFromSql } from "./booksDataFromSql.ts";
 
 export async function seed() {
   initDb();
@@ -48,7 +41,7 @@ export async function seed() {
 
   // Seed Users
   const hashedPassword = await bcrypt.hash("password123", 10);
-  const insertUser = db.prepare("INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)");
+  const insertUser = db.prepare("INSERT INTO users (email, password, full_name, role, email_verified) VALUES (?, ?, ?, ?, 1)");
   
   insertUser.run("user@example.com", hashedPassword, "Người dùng mẫu", "user");
   insertUser.run("admin@example.com", hashedPassword, "Quản trị viên", "admin");
@@ -60,16 +53,7 @@ export async function seed() {
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const allBooks = [
-    ...booksData,
-    ...booksData2,
-    ...booksData3,
-    ...booksData4,
-    ...booksData5,
-    ...booksData6,
-    ...booksData7,
-    ...booksData8
-  ];
+  const allBooks = booksDataFromSql;
 
   for (const book of allBooks) {
     insertBook.run(

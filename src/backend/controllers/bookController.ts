@@ -35,7 +35,7 @@ export const getAllBooks = (req: Request, res: Response) => {
 
   let query = `
     SELECT b.*, c.name as category_name,
-      COALESCE(SUM(CASE WHEN o.status != 'cancelled' THEN oi.quantity ELSE 0 END), 0) as sold_count
+      COALESCE(SUM(CASE WHEN o.status = 'delivered' THEN oi.quantity ELSE 0 END), 0) as sold_count
     FROM books b
     JOIN categories c ON b.category_id = c.id
     LEFT JOIN order_items oi ON oi.book_id = b.id

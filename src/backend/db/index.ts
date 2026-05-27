@@ -11,6 +11,11 @@ const db = new Database(dbPath);
 // Enable foreign keys
 db.pragma("foreign_keys = ON");
 
+const hasColumn = (tableName: string, columnName: string) => {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return columns.some(column => column.name === columnName);
+};
+
 export function initDb() {
   // Categories table
   db.exec(`
@@ -44,9 +49,26 @@ export function initDb() {
       password TEXT NOT NULL,
       full_name TEXT,
       role TEXT CHECK(role IN ('user', 'admin', 'super_admin')) DEFAULT 'user',
+      email_verified INTEGER NOT NULL DEFAULT 0,
+      email_verification_token TEXT,
+      email_verification_expires_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  const addedEmailVerified = !hasColumn("users", "email_verified");
+  if (addedEmailVerified) {
+    db.exec("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn("users", "email_verification_token")) {
+    db.exec("ALTER TABLE users ADD COLUMN email_verification_token TEXT");
+  }
+  if (!hasColumn("users", "email_verification_expires_at")) {
+    db.exec("ALTER TABLE users ADD COLUMN email_verification_expires_at DATETIME");
+  }
+  if (addedEmailVerified) {
+    db.prepare("UPDATE users SET email_verified = 1 WHERE email_verified = 0").run();
+  }
 
   // Orders table
   db.exec(`
@@ -57,6 +79,8 @@ export function initDb() {
       status TEXT CHECK(status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')) DEFAULT 'pending',
       shipping_address TEXT,
       phone TEXT,
+      payment_method TEXT DEFAULT 'cod',
+      payment_status TEXT DEFAULT 'unpaid',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id)
     )
@@ -67,6 +91,14 @@ export function initDb() {
     db.exec("ALTER TABLE orders ADD COLUMN phone TEXT");
   } catch (e) {
     // Column might already exist
+  }
+
+  if (!hasColumn("orders", "payment_method")) {
+    db.exec("ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'cod'");
+  }
+  if (!hasColumn("orders", "payment_status")) {
+    db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid'");
+    db.prepare("UPDATE orders SET payment_status = 'paid' WHERE payment_method = 'cod'").run();
   }
 
   // Order Items table

@@ -1,14 +1,28 @@
 const API_URL = "/api";
+const API_TIMEOUT_MS = 10000;
 
 export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
   const token = localStorage.getItem("token");
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const headers = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
-  const response = await fetch(`${API_URL}${endpoint}`, { ...options, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${endpoint}`, { ...options, headers, signal: options.signal || controller.signal });
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("Máy chủ phản hồi quá lâu. Vui lòng khởi động lại server rồi thử lại.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
   const payload = await response.json().catch(() => ({}));
 
   if (response.status === 401 || response.status === 403) {
@@ -27,6 +41,8 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
 export const authService = {
   login: (credentials: any) => fetchApi("/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
   register: (userData: any) => fetchApi("/auth/register", { method: "POST", body: JSON.stringify(userData) }),
+  verifyEmail: (token: string) => fetchApi("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),
+  rejectEmail: (token: string) => fetchApi("/auth/reject-email", { method: "POST", body: JSON.stringify({ token }) }),
   getProfile: () => fetchApi("/auth/profile"),
   updateProfile: (data: any) => fetchApi("/auth/profile", { method: "PUT", body: JSON.stringify(data) }),
 };
@@ -54,8 +70,9 @@ export const orderService = {
   create: (data: any) => fetchApi("/orders", { method: "POST", body: JSON.stringify(data) }),
   getMyOrders: () => fetchApi("/orders/my"),
   getDetails: (id: string) => fetchApi(`/orders/${id}`),
+  payTest: (id: string | number) => fetchApi(`/orders/${id}/pay-test`, { method: "POST" }),
   getAllAdmin: () => fetchApi("/admin/orders"),
-  getStats: () => fetchApi("/admin/stats"),
+  getStats: (period: "7d" | "30d" | "12m" = "7d") => fetchApi(`/admin/stats?period=${period}`),
   updateStatus: (id: number, status: string) => fetchApi(`/admin/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) }),
 };
 

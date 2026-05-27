@@ -9,6 +9,7 @@ const BookDetail = () => {
   const [book, setBook] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [quantity, setQuantity] = useState(1);
+  const [quantityInput, setQuantityInput] = useState("1");
   const [adding, setAdding] = useState(false);
   const [success, setSuccess] = useState(false);
   const { user } = useAuth();
@@ -21,6 +22,22 @@ const BookDetail = () => {
         .finally(() => setLoading(false));
     }
   }, [id]);
+
+  useEffect(() => {
+    setQuantityInput(String(quantity));
+  }, [quantity]);
+
+  const applyQuantityInput = () => {
+    const parsed = parseInt(quantityInput, 10);
+    if (isNaN(parsed)) {
+      setQuantity(1);
+      setQuantityInput("1");
+      return;
+    }
+    const safe = Math.max(1, Math.min(book?.stock || 1, parsed));
+    setQuantity(safe);
+    setQuantityInput(String(safe));
+  };
 
   const handleAddToCart = async () => {
     if (!user) {
@@ -90,13 +107,16 @@ const BookDetail = () => {
                   type="number"
                   min="1"
                   max={book.stock}
-                  value={quantity}
+                  value={quantityInput}
                   onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    if (!isNaN(val)) {
-                      setQuantity(Math.max(1, Math.min(book.stock, val)));
-                    } else {
-                      setQuantity(1);
+                    setQuantityInput(e.target.value);
+                  }}
+                  onFocus={(e) => e.currentTarget.select()}
+                  onBlur={applyQuantityInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyQuantityInput();
                     }
                   }}
                   className="w-16 py-2 font-bold text-center border-x focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"

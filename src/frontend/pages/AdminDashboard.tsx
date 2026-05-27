@@ -8,145 +8,135 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 const COLORS = ['#4f46e5', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#22c55e', '#06b6d4'];
 
 const AdminOverview = () => {
+  const [period, setPeriod] = useState<"7d" | "30d" | "12m">("7d");
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    orderService.getStats()
+    setLoading(true);
+    orderService.getStats(period)
       .then(setData)
       .finally(() => setLoading(false));
-  }, []);
+  }, [period]);
+
+  const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value || 0);
+  const formatCompact = (value: number) => {
+    if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+    if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return `${value || 0}`;
+  };
+
+  const getStatusBadgeClass = (status: string) => {
+    if (status === "pending" || status === "processing") return "bg-yellow-100 text-yellow-700";
+    if (status === "shipped") return "bg-blue-100 text-blue-700";
+    if (status === "delivered") return "bg-green-100 text-green-700";
+    if (status === "cancelled") return "bg-red-100 text-red-700";
+    return "bg-gray-100 text-gray-700";
+  };
+
+  const getStatusText = (status: string) => {
+    if (status === "pending") return "Pending";
+    if (status === "processing") return "Processing";
+    if (status === "shipped") return "Shipping";
+    if (status === "delivered") return "Delivered";
+    if (status === "cancelled") return "Cancelled";
+    return status;
+  };
 
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
 
+  const totalCategoryItems = (data?.categoryDistribution || []).reduce((sum: number, item: any) => sum + Number(item.count || 0), 0);
   const statCards = [
-    { title: "Tổng doanh thu", value: new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(data.stats.totalRevenue), icon: <DollarSign className="text-green-600" />, bg: "bg-green-50", trend: "+12.5%" },
-    { title: "Tổng đơn hàng", value: data.stats.totalOrders, icon: <ShoppingBag className="text-blue-600" />, bg: "bg-blue-50", trend: "+5.2%" },
-    { title: "Khách hàng", value: data.stats.totalCustomers, icon: <Users className="text-purple-600" />, bg: "bg-purple-50", trend: "+8.1%" },
-    { title: "Sản phẩm", value: data.stats.totalBooks, icon: <BookIcon className="text-orange-600" />, bg: "bg-orange-50", trend: "Hoạt động" },
+    { title: "Tổng doanh thu", value: formatCurrency(data?.stats?.totalRevenue || 0), note: "Chỉ tính đơn đã giao", icon: <DollarSign className="text-emerald-600" />, bg: "bg-emerald-50" },
+    { title: "Người dùng", value: `${data?.stats?.totalUsers || 0}`, note: "Tài khoản khách hàng", icon: <Users className="text-amber-600" />, bg: "bg-amber-50" },
+    { title: "Tổng đầu sách", value: `${data?.stats?.totalBooks || 0}`, note: "Sản phẩm trong kho", icon: <BookIcon className="text-indigo-600" />, bg: "bg-indigo-50" },
+    { title: "Đơn chờ xử lý", value: `${data?.stats?.pendingOrders || 0}`, note: "Đơn pending + processing", icon: <ShoppingBag className="text-orange-600" />, bg: "bg-orange-50" },
   ];
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h2 className="text-2xl font-bold text-gray-900">Chào mừng trở lại, Quản trị viên!</h2>
-        <p className="text-gray-500">Dưới đây là tóm tắt hiệu suất kinh doanh của cửa hàng hôm nay.</p>
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Tổng quan vận hành BookHaven</h2>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {statCards.map((card, i) => (
-          <div key={i} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col justify-between">
-            <div className="flex justify-between items-start mb-4">
-              <div className={`${card.bg} p-3 rounded-xl`}>{card.icon}</div>
-              <span className={`text-xs font-bold px-2 py-1 rounded-full ${card.trend.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-                {card.trend}
-              </span>
+          <div key={i} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
+            <div className="flex items-center justify-between mb-4">
+              <div className={`p-3 rounded-xl ${card.bg}`}>{card.icon}</div>
             </div>
-            <div>
-              <p className="text-sm text-gray-500 font-medium">{card.title}</p>
-              <h3 className="text-2xl font-bold text-gray-900 mt-1">{card.value}</h3>
-            </div>
+            <p className="text-sm text-gray-500 font-medium">{card.title}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
+            <p className="text-xs text-gray-400 mt-2">{card.note}</p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-gray-900">Doanh thu theo thời gian</h3>
-            <div className="flex bg-gray-100 p-1 rounded-lg text-xs font-bold">
-              <button className="px-3 py-1 bg-white rounded-md shadow-sm">Tuần</button>
-              <button className="px-3 py-1 text-gray-500">Tháng</button>
-            </div>
-          </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data.revenueByDay}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#9ca3af', fontSize: 12}} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Line type="monotone" dataKey="revenue" stroke="#4f46e5" strokeWidth={4} dot={{ r: 6, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 8 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      
 
-        <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-bold text-gray-900 mb-6">Cơ cấu danh mục</h3>
-          <div className="h-64 relative">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data.categoryDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {data.categoryDistribution.map((entry: any, index: number) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-2xl font-bold text-gray-900">{data.stats.totalBooks}</span>
-              <span className="text-xs text-gray-500 uppercase font-bold tracking-wider">Tổng</span>
-            </div>
-          </div>
-          <div className="mt-6 space-y-3">
-            {data.categoryDistribution.slice(0, 4).map((cat: any, i: number) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{backgroundColor: COLORS[i % COLORS.length]}}></div>
-                  <span className="text-sm text-gray-600">{cat.name}</span>
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Sách bán chạy</h3>
+          <div className="space-y-3">
+            {(data?.topSellingBooks || []).map((book: any, idx: number) => (
+              <div key={book.id} className="flex items-start justify-between p-3 rounded-xl bg-gray-50">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">#{idx + 1} {book.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{book.author}</p>
                 </div>
-                <span className="text-sm font-bold text-gray-900">{Math.round((cat.value / data.stats.totalBooks) * 100)}%</span>
+                <p className="text-sm font-bold text-indigo-600 whitespace-nowrap">{book.sold_quantity} đã bán</p>
               </div>
             ))}
+            {(!data?.topSellingBooks || data.topSellingBooks.length === 0) && <p className="text-sm text-gray-500">Chưa có dữ liệu bán hàng đã giao.</p>}
           </div>
         </div>
+
+        <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900 mb-4">Sách sắp hết hàng</h3>
+          <div className="space-y-3">
+            {(data?.lowStockBooks || []).map((book: any) => (
+              <div key={book.id} className="flex items-start justify-between p-3 rounded-xl bg-red-50">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-gray-900 truncate">{book.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                </div>
+                <span className="text-xs font-bold px-2 py-1 rounded-full bg-red-100 text-red-700">Còn {book.stock}</span>
+              </div>
+            ))}
+            {(!data?.lowStockBooks || data.lowStockBooks.length === 0) && <p className="text-sm text-gray-500">Không có cảnh báo tồn kho thấp.</p>}
+          </div>
+        </div>
+
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+      <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-gray-100 flex items-center justify-between">
           <h3 className="text-lg font-bold text-gray-900">Đơn hàng gần đây</h3>
-          <Link to="/admin/orders" className="text-indigo-600 text-sm font-bold hover:underline">Xem tất cả</Link>
+          <Link to="/admin/orders" className="text-indigo-600 text-sm font-semibold hover:underline">Xem tất cả</Link>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table className="w-full min-w-[760px]">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Mã đơn</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Khách hàng</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Tổng tiền</th>
-                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Trạng thái</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Mã đơn</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Khách hàng</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Ngày đặt</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Tổng tiền</th>
+                <th className="px-6 py-3 text-left text-xs font-semibold tracking-wider text-gray-500 uppercase">Trạng thái</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
-              {data.recentOrders.map((order: any) => (
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {(data?.recentOrders || []).map((order: any) => (
                 <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-indigo-600">#ORD-{order.id}</td>
-                  <td className="px-6 py-4 text-sm text-gray-900 font-medium">{order.user_name}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-gray-900">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}
-                  </td>
+                  <td className="px-6 py-4 text-sm font-semibold text-indigo-600">#ORD-{order.id}</td>
+                  <td className="px-6 py-4 text-sm text-gray-700 font-medium">{order.user_name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{new Date(order.created_at).toLocaleDateString("vi-VN")}</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">{formatCurrency(order.total_price)}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                      order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {order.status === 'pending' ? 'ĐANG XỬ LÝ' : 
-                       order.status === 'delivered' ? 'ĐÃ GIAO' : 
-                       order.status === 'cancelled' ? 'ĐÃ HỦY' : order.status.toUpperCase()}
-                    </span>
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(order.status)}`}>{getStatusText(order.status)}</span>
                   </td>
                 </tr>
               ))}
@@ -161,6 +151,7 @@ const AdminOverview = () => {
 const AdminBooks = () => {
   const [books, setBooks] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<any>(null);
@@ -168,12 +159,17 @@ const AdminBooks = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [inputPage, setInputPage] = useState("1");
   const [formData, setFormData] = useState({
-    title: "", author: "", description: "", price: 0, category_id: 1, stock: 0, image_url: ""
+    title: "", author: "", description: "", price: "", category_id: 1, stock: "", image_url: ""
   });
 
   const fetchBooks = () => {
     setLoading(true);
-    bookService.getAll(`?page=${page}&limit=25`)
+    const normalizedKeyword = searchKeyword.trim();
+    const query = normalizedKeyword
+      ? `?page=${page}&limit=25&search=${encodeURIComponent(normalizedKeyword)}`
+      : `?page=${page}&limit=25`;
+
+    bookService.getAll(query)
       .then(data => {
         setBooks(data.books);
         setTotalPages(data.totalPages);
@@ -183,7 +179,11 @@ const AdminBooks = () => {
 
   useEffect(() => {
     fetchBooks();
-  }, [page]);
+  }, [page, searchKeyword]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchKeyword]);
 
   useEffect(() => {
     bookService.getCategories().then(setCategories);
@@ -216,10 +216,16 @@ const AdminBooks = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...formData,
+        price: Number(formData.price),
+        stock: Number(formData.stock),
+      };
+
       if (editingBook) {
-        await bookService.update(editingBook.id, formData);
+        await bookService.update(editingBook.id, payload);
       } else {
-        await bookService.create(formData);
+        await bookService.create(payload);
       }
       setIsModalOpen(false);
       fetchBooks();
@@ -244,14 +250,14 @@ const AdminBooks = () => {
         title: book.title,
         author: book.author,
         description: book.description,
-        price: book.price,
+        price: String(book.price ?? ""),
         category_id: book.category_id,
-        stock: book.stock,
+        stock: String(book.stock ?? ""),
         image_url: book.image_url
       });
     } else {
       setEditingBook(null);
-      setFormData({ title: "", author: "", description: "", price: 0, category_id: 1, stock: 0, image_url: "" });
+      setFormData({ title: "", author: "", description: "", price: "", category_id: 1, stock: "", image_url: "" });
     }
     setIsModalOpen(true);
   };
@@ -263,6 +269,16 @@ const AdminBooks = () => {
         <button onClick={() => openModal()} className="bg-indigo-600 text-white px-4 py-2 rounded-lg flex items-center font-bold hover:bg-indigo-700">
           <Plus className="mr-2 h-5 w-5" /> Thêm sách mới
         </button>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm border p-4">
+        <input
+          type="text"
+          value={searchKeyword}
+          onChange={(e) => setSearchKeyword(e.target.value)}
+          placeholder="Tìm theo tên sách hoặc tác giả..."
+          className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
+        />
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
@@ -283,7 +299,9 @@ const AdminBooks = () => {
               </tr>
             ) : books.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">Không có sách nào</td>
+                <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                  {searchKeyword.trim() ? "Không tìm thấy sách phù hợp" : "Không có sách nào"}
+                </td>
               </tr>
             ) : (
               books.map(book => (
@@ -369,11 +387,25 @@ const AdminBooks = () => {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Giá (VND)</label>
-                <input type="number" required className="w-full p-2 border rounded-lg" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} />
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full p-2 border rounded-lg"
+                  value={formData.price}
+                  onChange={e => setFormData({...formData, price: e.target.value})}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Số lượng trong kho</label>
-                <input type="number" required className="w-full p-2 border rounded-lg" value={formData.stock} onChange={e => setFormData({...formData, stock: Number(e.target.value)})} />
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  className="w-full p-2 border rounded-lg"
+                  value={formData.stock}
+                  onChange={e => setFormData({...formData, stock: e.target.value})}
+                />
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold">URL Hình ảnh</label>

@@ -1,9 +1,29 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { orderService } from "../services/api.ts";
 import { ArrowLeft, Package, MapPin, Calendar, CreditCard, Clock, CheckCircle, Truck, XCircle } from "lucide-react";
 
 const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=BookHaven";
+
+const getPaymentMethodText = (method?: string) => {
+  switch (method) {
+    case "card": return "Thanh toán bằng thẻ";
+    case "qr_code": return "Thanh toán bằng QR";
+    case "bank_transfer": return "Chuyển khoản ngân hàng";
+    case "momo": return "Ví MoMo";
+    case "cod":
+    default: return "Thanh toán khi nhận hàng (COD)";
+  }
+};
+
+const getPaymentStatusText = (status?: string) => {
+  switch (status) {
+    case "paid": return "Đã thanh toán";
+    case "pending": return "Chờ thanh toán";
+    case "unpaid":
+    default: return "Chưa thanh toán";
+  }
+};
 
 const OrderDetail = () => {
   const { id } = useParams();
@@ -83,7 +103,17 @@ const OrderDetail = () => {
               <h3 className="text-lg font-bold text-gray-900 flex items-center">
                 <CreditCard className="h-5 w-5 mr-2 text-indigo-600" /> Phương thức thanh toán
               </h3>
-              <p className="text-gray-600">Thanh toán khi nhận hàng (COD)</p>
+              <div className="text-gray-600 space-y-2">
+                <p>{getPaymentMethodText(order.payment_method)}</p>
+                <p>
+                  Trạng thái: <span className={order.payment_status === "paid" ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>{getPaymentStatusText(order.payment_status)}</span>
+                </p>
+                {order.payment_method !== "cod" && order.payment_status !== "paid" && (
+                  <Link to={`/payment/${order.id}`} className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">
+                    Thanh toán ngay
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
 

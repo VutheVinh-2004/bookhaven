@@ -4,12 +4,13 @@ import * as bookController from "../controllers/bookController.ts";
 import * as orderController from "../controllers/orderController.ts";
 import * as userController from "../controllers/userController.ts";
 import { authenticateToken, authorizeRoles } from "../middleware/auth.ts";
-import { loginRateLimit } from "../middleware/rateLimit.ts";
 
 const router = express.Router();
 
 router.post("/auth/register", authController.register);
-router.post("/auth/login", loginRateLimit, authController.login);
+router.post("/auth/login", authController.login);
+router.post("/auth/verify-email", authController.verifyEmail);
+router.post("/auth/reject-email", authController.rejectEmail);
 router.get("/books", bookController.getAllBooks);
 router.get("/books/:id", bookController.getBookById);
 router.get("/categories", bookController.getAllCategories);
@@ -22,6 +23,7 @@ router.put("/cart/:id", authenticateToken, orderController.updateCartItem);
 router.delete("/cart/:id", authenticateToken, orderController.removeFromCart);
 router.post("/orders", authenticateToken, orderController.createOrder);
 router.get("/orders/my", authenticateToken, orderController.getMyOrders);
+router.post("/orders/:id/pay-test", authenticateToken, orderController.payOrderTest);
 router.get("/orders/:id", authenticateToken, orderController.getOrderDetails);
 
 router.post("/admin/categories", authenticateToken, authorizeRoles("admin", "super_admin"), bookController.createCategory);

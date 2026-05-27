@@ -39,6 +39,26 @@ const MyOrders = () => {
     }
   };
 
+  const getPaymentMethodText = (method?: string) => {
+    switch (method) {
+      case "card": return "Thẻ";
+      case "qr_code": return "QR";
+      case "bank_transfer": return "Chuyển khoản";
+      case "momo": return "MoMo";
+      case "cod":
+      default: return "COD";
+    }
+  };
+
+  const getPaymentStatusText = (status?: string) => {
+    switch (status) {
+      case "paid": return "Đã thanh toán";
+      case "pending": return "Chờ thanh toán";
+      case "unpaid":
+      default: return "Chưa thanh toán";
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
 
   return (
@@ -63,6 +83,12 @@ const MyOrders = () => {
                   <div className="text-sm text-gray-500">
                     Ngày đặt: {new Date(order.created_at).toLocaleDateString('vi-VN')}
                   </div>
+                  <div className="text-sm text-gray-500">
+                    Thanh toán: {getPaymentMethodText(order.payment_method)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Trạng thái thanh toán: <span className={order.payment_status === "paid" ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>{getPaymentStatusText(order.payment_status)}</span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-6">
@@ -83,9 +109,16 @@ const MyOrders = () => {
                 <p className="text-sm text-gray-600 truncate max-w-md">
                   <span className="font-bold">Giao đến:</span> {order.shipping_address}
                 </p>
-                <Link to={`/orders/${order.id}`} className="text-indigo-600 text-sm font-bold flex items-center hover:underline">
-                  Chi tiết <ChevronRight size={16} />
-                </Link>
+                <div className="flex items-center gap-3">
+                  {order.payment_method !== "cod" && order.payment_status !== "paid" && (
+                    <Link to={`/payment/${order.id}`} className="text-amber-600 text-sm font-bold hover:underline">
+                      Thanh toán ngay
+                    </Link>
+                  )}
+                  <Link to={`/orders/${order.id}`} className="text-indigo-600 text-sm font-bold flex items-center hover:underline">
+                    Chi tiết <ChevronRight size={16} />
+                  </Link>
+                </div>
               </div>
             </div>
           ))}

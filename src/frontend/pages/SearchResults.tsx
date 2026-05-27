@@ -1,31 +1,32 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate, useParams, Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { bookService, cartService } from "../services/api.ts";
 import { ShoppingCart } from "lucide-react";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext.tsx";
 
-const CategoryBooks = () => {
-  const { categoryName = "" } = useParams();
-  const decodedCategory = decodeURIComponent(categoryName);
+const SearchResults = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [books, setBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [pageInput, setPageInput] = useState("1");
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { user } = useAuth();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const keyword = (searchParams.get("search") || "").trim();
   const currentPage = Math.max(Number(searchParams.get("page") || 1), 1);
   const PAGE_SIZE = 24;
 
   useEffect(() => {
     setLoading(true);
-    const query = decodedCategory.toLowerCase() === "all"
-      ? `?page=${currentPage}&limit=${PAGE_SIZE}&sort=bestseller`
-      : `?page=${currentPage}&limit=${PAGE_SIZE}&category=${encodeURIComponent(decodedCategory)}&sort=bestseller`;
+    const query = new URLSearchParams();
+    query.set("page", String(currentPage));
+    query.set("limit", String(PAGE_SIZE));
+    if (keyword) query.set("search", keyword);
 
     bookService
-      .getAll(query)
+      .getAll(`?${query.toString()}`)
       .then((data) => {
         setBooks(data.books || []);
         setTotalPages(Math.max(Number(data.totalPages) || 1, 1));
@@ -35,20 +36,11 @@ const CategoryBooks = () => {
         setTotalPages(1);
       })
       .finally(() => setLoading(false));
-  }, [decodedCategory, currentPage]);
+  }, [keyword, currentPage]);
 
   useEffect(() => {
     setPageInput(String(currentPage));
   }, [currentPage]);
-
-  useEffect(() => {
-    setSearchParams((prev) => {
-      if (!prev.has("page")) return prev;
-      const next = new URLSearchParams(prev);
-      next.delete("page");
-      return next;
-    });
-  }, [decodedCategory, setSearchParams]);
 
   const goToPage = (page: number) => {
     const safePage = Math.min(Math.max(page, 1), totalPages);
@@ -72,9 +64,10 @@ const CategoryBooks = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">
-          {decodedCategory.toLowerCase() === "all" ? "Tất cả sản phẩm" : decodedCategory}
-        </h1>
+        <h1 className="text-3xl font-bold text-gray-900">Kết quả tìm kiếm</h1>
+        <p className="text-gray-600 mt-1">
+          {keyword ? <>Từ khóa: <span className="font-semibold">"{keyword}"</span></> : "Vui lòng nhập từ khóa để tìm sách."}
+        </p>
       </div>
 
       {loading ? (
@@ -82,7 +75,7 @@ const CategoryBooks = () => {
           {[...Array(12)].map((_, i) => <div key={i} className="animate-pulse h-64 bg-gray-200 rounded-xl" />)}
         </div>
       ) : books.length === 0 ? (
-        <div className="bg-white border rounded-2xl p-10 text-center text-gray-500">Chưa có sách trong thể loại này.</div>
+        <div className="bg-white border rounded-2xl p-10 text-center text-gray-500">Không tìm thấy sách phù hợp.</div>
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
@@ -157,4 +150,4 @@ const CategoryBooks = () => {
   );
 };
 
-export default CategoryBooks;
+export default SearchResults;

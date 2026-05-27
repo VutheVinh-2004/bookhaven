@@ -34,6 +34,18 @@ export const deleteUser = (req: AuthRequest, res: Response) => {
   if (!user) return fail(res, 404, "Không tìm thấy người dùng.");
   if (user.role === "super_admin") return fail(res, 400, "Không thể xóa tài khoản super admin khác.");
 
-  db.prepare("DELETE FROM users WHERE id = ?").run(id);
-  return ok(res, null, "Xóa người dùng thành công.");
+  const deleteUserWithData = db.transaction((userId: number) => {
+    db.prepare("DELETE FROM cart_items WHERE user_id = ?").run(userId);
+    db.prepare(`
+      DELETE FROM order_items
+      WHERE order_id IN (
+        SELECT id FROM orders WHERE user_id = ?
+      )
+    `).run(userId);
+    db.prepare("DELETE FROM orders WHERE user_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  });
+
+  deleteUserWithData(id);
+  return ok(res, null, "Xóa người dùng và toàn bộ dữ liệu liên quan thành công.");
 };

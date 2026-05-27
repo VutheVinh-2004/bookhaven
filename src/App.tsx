@@ -1,18 +1,21 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
-import { ShoppingCart, User, LogOut, Book as BookIcon, Search, Menu, X } from "lucide-react";
+import { ShoppingCart, User, LogOut, Search, Menu, X } from "lucide-react";
 import { AuthProvider, useAuth } from "./frontend/context/AuthContext.tsx";
 import Home from "./frontend/pages/Home.tsx";
 import Login from "./frontend/pages/Login.tsx";
 import Register from "./frontend/pages/Register.tsx";
+import VerifyEmail from "./frontend/pages/VerifyEmail.tsx";
 import BookDetail from "./frontend/pages/BookDetail.tsx";
 import Cart from "./frontend/pages/Cart.tsx";
 import MyOrders from "./frontend/pages/MyOrders.tsx";
 import OrderDetail from "./frontend/pages/OrderDetail.tsx";
+import PaymentTest from "./frontend/pages/PaymentTest.tsx";
 import AdminDashboard from "./frontend/pages/AdminDashboard.tsx";
 import SuperAdminDashboard from "./frontend/pages/SuperAdminDashboard.tsx";
 import Profile from "./frontend/pages/Profile.tsx";
 import CategoryBooks from "./frontend/pages/CategoryBooks.tsx";
+import SearchResults from "./frontend/pages/SearchResults.tsx";
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -24,9 +27,9 @@ const Navbar = () => {
     e.preventDefault();
     const keyword = searchText.trim();
     if (keyword) {
-      navigate(`/?search=${encodeURIComponent(keyword)}`);
+      navigate(`/search?search=${encodeURIComponent(keyword)}`);
     } else {
-      navigate("/");
+      navigate("/search");
     }
     setIsMenuOpen(false);
   };
@@ -42,7 +45,7 @@ const Navbar = () => {
         <div className="flex justify-between h-16 gap-4">
           <div className="flex items-center gap-4 min-w-0">
             <Link to="/" className="flex items-center space-x-2">
-              <BookIcon className="h-8 w-8 text-indigo-600" />
+              <img src="/book-haven-logo.svg" alt="Book Haven" className="h-8 w-8" />
               <span className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                 BookHaven
               </span>
@@ -61,7 +64,6 @@ const Navbar = () => {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-indigo-600 font-medium">Cửa hàng</Link>
             {user ? (
               <>
                 {(user.role === "admin" || user.role === "super_admin") && (
@@ -123,7 +125,6 @@ const Navbar = () => {
               className="w-full pl-9 pr-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
             />
           </form>
-          <Link to="/" className="block text-gray-700 font-medium">Cửa hàng</Link>
           {user ? (
             <>
               <Link to="/profile" className="block text-gray-700 font-medium">Thông tin cá nhân</Link>
@@ -160,9 +161,12 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/category/:categoryName" element={<CategoryBooks />} />
+              <Route path="/search" element={<SearchResults />} />
               <Route path="/cart" element={<Cart />} />
+              <Route path="/payment/:id" element={<PaymentTest />} />
               <Route path="/orders" element={<MyOrders />} />
               <Route path="/orders/:id" element={<OrderDetail />} />
               <Route path="/profile" element={<Profile />} />

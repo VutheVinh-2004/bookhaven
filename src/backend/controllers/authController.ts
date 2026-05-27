@@ -4,6 +4,12 @@ import db from "../db/index.ts";
 import { AuthRequest, signToken } from "../middleware/auth.ts";
 import { created, fail, ok } from "../utils/response.ts";
 import { hasErrors, isEmail, isNonEmptyString, isStrongPassword, isValidFullName, normalizeEmail, trimText, ValidationErrors } from "../utils/validation.ts";
+import {
+  buildVerificationUrl,
+  createEmailVerificationToken,
+  getEmailVerificationExpiry,
+  sendVerificationEmail
+} from "../services/emailService.ts";
 
 const publicUser = (user: any) => ({
   id: user.id,
@@ -28,13 +34,24 @@ export const register = async (req: Request, res: Response) => {
     if (existingUser) return fail(res, 409, "Email đã tồn tại.");
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const result = db.prepare(
-      "INSERT INTO users (email, password, full_name, role) VALUES (?, ?, ?, ?)"
-    ).run(email, hashedPassword, fullName, "user");
+    const verificationToken = createEmailVerificationToken();
+    const verificationExpiresAt = getEmailVerificationExpiry();
+    db.prepare(
+      `INSERT INTO users (email, password, full_name, role, email_verified, email_verification_token, email_verification_expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(email, hashedPassword, fullName, "user", 0, verificationToken, verificationExpiresAt);
 
-    const user = { id: Number(result.lastInsertRowid), email, role: "user" as const, full_name: fullName };
-    const token = signToken({ id: user.id, email: user.email, role: user.role });
-    return created(res, { token, user: publicUser(user) }, "Đăng ký thành công.");
+    const verificationUrl = buildVerificationUrl(verificationToken);
+    void sendVerificationEmail({ to: email, fullName, token: verificationToken })
+      .catch((emailError) => {
+        console.error("Send verification email error:", emailError);
+      });
+
+    return created(
+      res,
+      { requiresEmailVerification: true, ...(process.env.NODE_ENV !== "production" ? { verificationUrl } : {}) },
+      "Đăng ký thành công. Vui lòng kiểm tra email để xác nhận tài khoản."
+    );
   } catch (error) {
     console.error("Register error:", error);
     return fail(res, 500, "Lỗi đăng ký tài khoản.");
@@ -52,16 +69,75 @@ export const login = async (req: Request, res: Response) => {
 
   try {
     const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
-    if (!user) return fail(res, 400, "Email hoặc mật khẩu không chính xác.");
+    if (!user) return fail(res, 404, "Tài khoản không tồn tại.");
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return fail(res, 400, "Email hoặc mật khẩu không chính xác.");
+    if (!user.email_verified) return fail(res, 403, "Vui lòng xác nhận email trước khi đăng nhập.");
 
     const token = signToken({ id: user.id, email: user.email, role: user.role });
     return ok(res, { token, user: publicUser(user) }, "Đăng nhập thành công.");
   } catch (error) {
     console.error("Login error:", error);
     return fail(res, 500, "Lỗi đăng nhập.");
+  }
+};
+
+export const verifyEmail = async (req: Request, res: Response) => {
+  const token = typeof req.body.token === "string" ? req.body.token.trim() : "";
+  if (!token) return fail(res, 400, "Thiếu mã xác nhận email.");
+
+  try {
+    const user = db.prepare(
+      `SELECT id, email, role, full_name, email_verification_expires_at
+       FROM users
+       WHERE email_verification_token = ?`
+    ).get(token) as any;
+
+    if (!user) return fail(res, 400, "Mã xác nhận không hợp lệ.");
+    if (new Date(user.email_verification_expires_at).getTime() < Date.now()) {
+      return fail(res, 400, "Mã xác nhận đã hết hạn. Vui lòng đăng ký lại.");
+    }
+
+    db.prepare(
+      `UPDATE users
+       SET email_verified = 1,
+           email_verification_token = NULL,
+           email_verification_expires_at = NULL
+       WHERE id = ?`
+    ).run(user.id);
+
+    const authToken = signToken({ id: user.id, email: user.email, role: user.role });
+    return ok(res, { token: authToken, user: publicUser(user) }, "Xác nhận email thành công.");
+  } catch (error) {
+    console.error("Verify email error:", error);
+    return fail(res, 500, "Lỗi xác nhận email.");
+  }
+};
+
+export const rejectEmail = async (req: Request, res: Response) => {
+  const token = typeof req.body.token === "string" ? req.body.token.trim() : "";
+  if (!token) return fail(res, 400, "Thiếu mã xác nhận email.");
+
+  try {
+    const user = db.prepare(
+      `SELECT id, email_verification_expires_at
+       FROM users
+       WHERE email_verification_token = ?
+         AND email_verified = 0`
+    ).get(token) as any;
+
+    if (!user) return fail(res, 400, "Mã xác nhận không hợp lệ hoặc đã được sử dụng.");
+    if (new Date(user.email_verification_expires_at).getTime() < Date.now()) {
+      db.prepare("DELETE FROM users WHERE id = ? AND email_verified = 0").run(user.id);
+      return ok(res, null, "Link xác nhận đã hết hạn. Tài khoản đăng ký đã bị hủy.");
+    }
+
+    db.prepare("DELETE FROM users WHERE id = ? AND email_verified = 0").run(user.id);
+    return ok(res, null, "Bạn đã từ chối xác nhận email. Tài khoản đăng ký đã bị hủy.");
+  } catch (error) {
+    console.error("Reject email error:", error);
+    return fail(res, 500, "Lỗi từ chối xác nhận email.");
   }
 };
 

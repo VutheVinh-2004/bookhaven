@@ -82,10 +82,13 @@ export const createOrder = (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
   const shippingAddress = trimText(req.body.shipping_address);
   const phone = trimText(req.body.phone);
+  const paymentMethod = trimText(req.body.payment_method) || "cod";
+  const allowedPaymentMethods = ["cod", "qr_code", "card", "bank_transfer", "momo"];
   const errors: ValidationErrors = {};
 
   if (!isNonEmptyString(shippingAddress, 5, 255)) errors.shipping_address = "Địa chỉ giao hàng phải từ 5 đến 255 ký tự.";
   if (!isPhone(phone)) errors.phone = "Số điện thoại Việt Nam không hợp lệ.";
+  if (!allowedPaymentMethods.includes(paymentMethod)) errors.payment_method = "Phương thức thanh toán không hợp lệ.";
   if (hasErrors(errors)) return fail(res, 400, "Dữ liệu đặt hàng không hợp lệ.", errors);
 
   try {
@@ -103,11 +106,12 @@ export const createOrder = (req: AuthRequest, res: Response) => {
     }
 
     const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const paymentStatus = paymentMethod === "cod" ? "paid" : "pending";
     const transaction = db.transaction(() => {
       const orderResult = db.prepare(`
-        INSERT INTO orders (user_id, total_price, shipping_address, phone)
-        VALUES (?, ?, ?, ?)
-      `).run(userId, totalPrice, shippingAddress, phone);
+        INSERT INTO orders (user_id, total_price, shipping_address, phone, payment_method, payment_status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(userId, totalPrice, shippingAddress, phone, paymentMethod, paymentStatus);
       const orderId = orderResult.lastInsertRowid;
       const insertOrderItem = db.prepare("INSERT INTO order_items (order_id, book_id, quantity, price) VALUES (?, ?, ?, ?)");
       const updateStock = db.prepare("UPDATE books SET stock = stock - ? WHERE id = ? AND stock >= ?");
@@ -125,6 +129,25 @@ export const createOrder = (req: AuthRequest, res: Response) => {
   } catch (error: any) {
     console.error("Create order error:", error);
     return fail(res, 400, error.message || "Lỗi tạo đơn hàng.");
+  }
+};
+
+export const payOrderTest = (req: AuthRequest, res: Response) => {
+  if (!isPositiveInt(req.params.id)) return fail(res, 400, "ID đơn hàng không hợp lệ.");
+
+  try {
+    const order = db.prepare("SELECT id, user_id, payment_method, payment_status, status FROM orders WHERE id = ?").get(req.params.id) as any;
+    if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
+    if (req.user?.role === "user" && order.user_id !== req.user.id) return fail(res, 403, "Bạn không có quyền thanh toán đơn hàng này.");
+    if (order.status === "cancelled") return fail(res, 400, "Đơn hàng đã hủy, không thể thanh toán.");
+    if (order.payment_method === "cod") return fail(res, 400, "Đơn hàng COD không cần thanh toán online.");
+    if (order.payment_status === "paid") return ok(res, null, "Đơn hàng đã được thanh toán trước đó.");
+
+    db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(order.id);
+    return ok(res, null, "Thanh toán thành công.");
+  } catch (error) {
+    console.error("Pay order test error:", error);
+    return fail(res, 500, "Lỗi thanh toán.");
   }
 };
 
@@ -162,46 +185,123 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
   const allowed = ["pending", "processing", "shipped", "delivered", "cancelled"];
   if (!allowed.includes(status)) return fail(res, 400, "Trạng thái đơn hàng không hợp lệ.");
 
-  const result = db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, req.params.id);
-  if (result.changes === 0) return fail(res, 404, "Không tìm thấy đơn hàng.");
-  return ok(res, null, "Cập nhật trạng thái đơn hàng thành công.");
+  const order = db.prepare("SELECT id, status FROM orders WHERE id = ?").get(req.params.id) as { id: number; status: string } | undefined;
+  if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
+
+  if (order.status === status) {
+    return ok(res, null, "Trạng thái đơn hàng không thay đổi.");
+  }
+
+  if (order.status === "cancelled") {
+    return fail(res, 400, "Đơn hàng đã hủy, không thể cập nhật lại trạng thái.");
+  }
+
+  try {
+    const transaction = db.transaction(() => {
+      if (status === "cancelled") {
+        const orderItems = db.prepare("SELECT book_id, quantity FROM order_items WHERE order_id = ?").all(req.params.id) as Array<{ book_id: number; quantity: number }>;
+        const restoreStock = db.prepare("UPDATE books SET stock = stock + ? WHERE id = ?");
+        for (const item of orderItems) {
+          restoreStock.run(item.quantity, item.book_id);
+        }
+      }
+
+      db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, req.params.id);
+    });
+
+    transaction();
+    return ok(res, null, "Cập nhật trạng thái đơn hàng thành công.");
+  } catch (error) {
+    console.error("Update order status error:", error);
+    return fail(res, 500, "Lỗi cập nhật trạng thái đơn hàng.");
+  }
 };
 
-export const getAdminStats = (_req: AuthRequest, res: Response) => {
-  const totalRevenue = db.prepare("SELECT SUM(total_price) as total FROM orders WHERE status = 'delivered'").get() as any;
-  const totalOrders = db.prepare("SELECT COUNT(*) as count FROM orders").get() as any;
-  const totalCustomers = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'user'").get() as any;
+export const getAdminStats = (req: AuthRequest, res: Response) => {
+  const period = trimText(req.query.period as string).toLowerCase();
+  const allowedPeriods = ["7d", "30d", "12m"];
+  const selectedPeriod = allowedPeriods.includes(period) ? period : "7d";
+
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_price), 0) as total FROM orders WHERE status = 'delivered'").get() as any;
+  const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'processing')").get() as any;
+  const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'user'").get() as any;
   const totalBooks = db.prepare("SELECT COUNT(*) as count FROM books").get() as any;
-  const revenueByDay = db.prepare(`
-    SELECT date(created_at) as date, SUM(total_price) as revenue
-    FROM orders
-    WHERE status = 'delivered' AND created_at >= date('now', '-7 days')
-    GROUP BY date(created_at)
-    ORDER BY date
-  `).all();
-  const categoryDistribution = db.prepare(`
-    SELECT c.name, COUNT(b.id) as value
+  const totalCategories = db.prepare("SELECT COUNT(*) as count FROM categories").get() as any;
+
+  const revenueByPeriod = selectedPeriod === "12m"
+    ? db.prepare(`
+      SELECT strftime('%Y-%m', created_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      FROM orders
+      WHERE status = 'delivered' AND date(created_at) >= date('now', '-11 months', 'start of month')
+      GROUP BY strftime('%Y-%m', created_at)
+      ORDER BY label
+    `).all()
+    : db.prepare(`
+      SELECT date(created_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      FROM orders
+      WHERE status = 'delivered'
+        AND date(created_at) >= date('now', ?)
+      GROUP BY date(created_at)
+      ORDER BY label
+    `).all(selectedPeriod === "30d" ? "-29 days" : "-6 days");
+
+  const rawCategories = db.prepare(`
+    SELECT c.name as name, COUNT(b.id) as count
     FROM categories c
     LEFT JOIN books b ON c.id = b.category_id
-    GROUP BY c.id
-  `).all();
+    GROUP BY c.id, c.name
+    ORDER BY count DESC, c.name ASC
+  `).all() as Array<{ name: string; count: number }>;
+
+  const top5Categories = rawCategories.slice(0, 5);
+  const otherCount = rawCategories.slice(5).reduce((sum, item) => sum + Number(item.count || 0), 0);
+  const categoryDistribution = otherCount > 0
+    ? [...top5Categories, { name: "Others", count: otherCount }]
+    : top5Categories;
+
   const recentOrders = db.prepare(`
-    SELECT o.*, u.full_name as user_name
+    SELECT o.id, o.total_price, o.status, o.created_at, o.phone,
+           u.full_name as user_name
     FROM orders o
     JOIN users u ON o.user_id = u.id
     ORDER BY o.created_at DESC
     LIMIT 5
   `).all();
 
+  const topSellingBooks = db.prepare(`
+    SELECT b.id, b.title, b.author,
+           COALESCE(SUM(oi.quantity), 0) as sold_quantity,
+           COALESCE(SUM(oi.quantity * oi.price), 0) as revenue
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    JOIN books b ON b.id = oi.book_id
+    WHERE o.status = 'delivered'
+    GROUP BY b.id, b.title, b.author
+    ORDER BY sold_quantity DESC, revenue DESC
+    LIMIT 5
+  `).all();
+
+  const lowStockBooks = db.prepare(`
+    SELECT id, title, author, stock
+    FROM books
+    WHERE stock < 10
+    ORDER BY stock ASC, title ASC
+    LIMIT 5
+  `).all();
+
   return ok(res, {
     stats: {
       totalRevenue: totalRevenue.total || 0,
-      totalOrders: totalOrders.count,
-      totalCustomers: totalCustomers.count,
-      totalBooks: totalBooks.count
+      pendingOrders: pendingOrders.count || 0,
+      totalUsers: totalUsers.count || 0,
+      totalBooks: totalBooks.count || 0,
+      totalCategories: totalCategories.count || 0
     },
-    revenueByDay,
+    selectedPeriod,
+    revenueByPeriod,
     categoryDistribution,
-    recentOrders
+    recentOrders,
+    topSellingBooks,
+    lowStockBooks
   });
 };

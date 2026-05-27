@@ -1,8 +1,7 @@
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { authService } from "../services/api.ts";
-import { useAuth } from "../context/AuthContext.tsx";
-import { Mail, Lock, User, AlertCircle } from "lucide-react";
+import { Mail, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -10,19 +9,18 @@ const Register = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setFieldErrors({});
 
     const trimmedFullName = fullName.trim();
     const trimmedEmail = email.trim();
-
     const clientErrors: Record<string, string> = {};
 
     if (trimmedFullName.length < 2 || trimmedFullName.length > 100) {
@@ -39,22 +37,24 @@ const Register = () => {
       clientErrors.password = "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ và số.";
     }
 
+    if (password !== confirmPassword) {
+      clientErrors.confirmPassword = "Mật khẩu nhập lại không khớp.";
+    }
+
     if (Object.keys(clientErrors).length > 0) {
       setFieldErrors(clientErrors);
       setError("Vui lòng kiểm tra lại thông tin đăng ký.");
       return;
     }
 
-    if (password !== confirmPassword) {
-      setError("Mật khẩu nhập lại không khớp");
-      return;
-    }
-
     setLoading(true);
     try {
-      const data = await authService.register({ email: trimmedEmail, password, fullName: trimmedFullName });
-      login(data);
-      navigate("/");
+      await authService.register({ email: trimmedEmail, password, fullName: trimmedFullName });
+      setSuccess("Vui lòng kiểm tra email để xác nhận tài khoản.");
+      setEmail("");
+      setPassword("");
+      setConfirmPassword("");
+      setFullName("");
     } catch (err: any) {
       if (err?.errors && typeof err.errors === "object") {
         setFieldErrors(err.errors);
@@ -70,13 +70,19 @@ const Register = () => {
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Tạo tài khoản</h1>
-          <p className="text-gray-500 mt-2">Tham gia cộng đồng yêu sách BookHaven</p>
         </div>
 
         {error && (
           <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center gap-2">
             <AlertCircle size={20} />
             <span className="text-sm font-medium">{error}</span>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-50 text-emerald-700 p-4 rounded-lg mb-6 flex items-start gap-2">
+            <CheckCircle2 size={20} className="mt-0.5 shrink-0" />
+            <p className="text-sm font-medium">{success}</p>
           </div>
         )}
 
@@ -98,13 +104,13 @@ const Register = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">Email</label>
+            <label className="text-sm font-semibold text-gray-700">Gmail hoặc email</label>
             <div className="relative">
               <input
                 type="email"
                 required
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
-                placeholder="email@example.com"
+                placeholder="email@gmail.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -142,6 +148,7 @@ const Register = () => {
               />
               <Lock className="absolute left-3 top-3.5 text-gray-400 h-5 w-5" />
             </div>
+            {fieldErrors.confirmPassword && <p className="text-red-600 text-xs">{fieldErrors.confirmPassword}</p>}
           </div>
 
           <button
@@ -149,7 +156,7 @@ const Register = () => {
             disabled={loading}
             className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold hover:bg-indigo-700 transition-colors disabled:opacity-50"
           >
-            {loading ? "Đang xử lý..." : "Đăng ký"}
+            {loading ? "Đang gửi email xác nhận..." : "Đăng ký"}
           </button>
         </form>
 

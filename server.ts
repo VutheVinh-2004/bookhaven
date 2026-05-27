@@ -21,6 +21,15 @@ async function startServer() {
     const allowedOrigins = (process.env.CORS_ORIGIN || "http://localhost:3000,http://localhost:5173")
       .split(",")
       .map(origin => origin.trim());
+    const isAllowedOrigin = (origin: string) => {
+      if (allowedOrigins.includes(origin)) return true;
+      try {
+        const { hostname } = new URL(origin);
+        return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+      } catch {
+        return false;
+      }
+    };
 
     initDb();
     if (process.env.SEED_DATABASE === "true") {
@@ -29,7 +38,7 @@ async function startServer() {
 
     app.use(cors({
       origin(origin, callback) {
-        if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+        if (!origin || isAllowedOrigin(origin)) return callback(null, true);
         return callback(new Error("Not allowed by CORS"));
       },
       credentials: true
