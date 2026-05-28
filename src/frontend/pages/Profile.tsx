@@ -46,18 +46,18 @@ const Profile = () => {
 
     setLoading(true);
     try {
-      const response = await authService.updateProfile({
+      const updatedUser = await authService.updateProfile({
         fullName: fullName.trim(),
         currentPassword: newPassword ? currentPassword : undefined,
         newPassword: newPassword || undefined
       });
       
-      // Update local auth context
-      if (response.user) {
-        login({ token: localStorage.getItem("token"), user: response.user });
+      const token = localStorage.getItem("token");
+      if (token) {
+        login({ token, user: updatedUser });
       }
       
-      setMessage({ type: "success", text: response.message });
+      setMessage({ type: "success", text: "Cap nhat thong tin thanh cong." });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
