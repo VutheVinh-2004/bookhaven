@@ -11,11 +11,12 @@ import Cart from "./frontend/pages/Cart.tsx";
 import MyOrders from "./frontend/pages/MyOrders.tsx";
 import OrderDetail from "./frontend/pages/OrderDetail.tsx";
 import PaymentTest from "./frontend/pages/PaymentTest.tsx";
-import AdminDashboard from "./frontend/pages/AdminDashboard.tsx";
-import SuperAdminDashboard from "./frontend/pages/SuperAdminDashboard.tsx";
 import Profile from "./frontend/pages/Profile.tsx";
 import CategoryBooks from "./frontend/pages/CategoryBooks.tsx";
 import SearchResults from "./frontend/pages/SearchResults.tsx";
+
+const AdminDashboard = React.lazy(() => import("./frontend/pages/AdminDashboard.tsx"));
+const SuperAdminDashboard = React.lazy(() => import("./frontend/pages/SuperAdminDashboard.tsx"));
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -170,8 +171,8 @@ export default function App() {
               <Route path="/orders" element={<MyOrders />} />
               <Route path="/orders/:id" element={<OrderDetail />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/admin/*" element={<AdminDashboard />} />
-              <Route path="/superadmin/*" element={<SuperAdminDashboard />} />
+              <Route path="/admin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Dang tai...</div>}><AdminDashboard /></React.Suspense>} />
+              <Route path="/superadmin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Dang tai...</div>}><SuperAdminDashboard /></React.Suspense>} />
             </Routes>
           </main>
           <footer className="bg-gray-800 text-white py-8">

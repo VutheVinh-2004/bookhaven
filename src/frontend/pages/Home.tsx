@@ -148,7 +148,7 @@ const Home = () => {
           <div className="relative rounded-xl overflow-hidden border border-orange-100 min-h-[280px] md:min-h-[360px]">
             <img
               src={promoSlides[activePromoSlide].image}
-              alt={promoSlides[activePromoSlide].title}
+              alt={promoSlides[activePromoSlide].badge}
               className="absolute inset-0 w-full h-full object-cover"
               referrerPolicy="no-referrer"
             />

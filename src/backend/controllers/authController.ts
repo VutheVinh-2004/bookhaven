@@ -8,6 +8,7 @@ import {
   buildVerificationUrl,
   createEmailVerificationToken,
   getEmailVerificationExpiry,
+  isEmailConfigured,
   sendVerificationEmail
 } from "../services/emailService.ts";
 
@@ -80,6 +81,57 @@ export const login = async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Login error:", error);
     return fail(res, 500, "Lỗi đăng nhập.");
+  }
+};
+
+export const resendVerificationEmail = async (req: Request, res: Response) => {
+  const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
+  if (!isEmail(email)) return fail(res, 400, "Email khong dung dinh dang.");
+
+  try {
+    const user = db.prepare(
+      "SELECT id, email, full_name, email_verified FROM users WHERE email = ?"
+    ).get(email) as any;
+
+    if (!user) {
+      return ok(res, null, "Neu email ton tai va chua xac nhan, BookHaven se gui lai lien ket xac nhan.");
+    }
+    if (user.email_verified) {
+      return ok(res, null, "Tai khoan da duoc xac nhan email.");
+    }
+
+    const verificationToken = createEmailVerificationToken();
+    const verificationExpiresAt = getEmailVerificationExpiry();
+    db.prepare(
+      `UPDATE users
+       SET email_verification_token = ?,
+           email_verification_expires_at = ?
+       WHERE id = ?`
+    ).run(verificationToken, verificationExpiresAt, user.id);
+
+    const verificationUrl = buildVerificationUrl(verificationToken);
+    if (!isEmailConfigured() && process.env.NODE_ENV !== "production") {
+      return ok(
+        res,
+        { verificationUrl },
+        "SMTP chua cau hinh. Da tao lai lien ket xac nhan cho moi truong phat trien."
+      );
+    }
+
+    await sendVerificationEmail({
+      to: user.email,
+      fullName: user.full_name || user.email,
+      token: verificationToken
+    });
+
+    return ok(
+      res,
+      process.env.NODE_ENV !== "production" ? { verificationUrl } : null,
+      "Da gui lai email xac nhan."
+    );
+  } catch (error) {
+    console.error("Resend verification email error:", error);
+    return fail(res, 500, "Khong the gui lai email xac nhan.");
   }
 };
 

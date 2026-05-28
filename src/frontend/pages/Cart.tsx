@@ -185,6 +185,7 @@ const Cart = () => {
   };
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const hasAddressDirectory = provinces.length > 0;
   const selectedProvince = provinces.find((p) => p.name === province);
   const districts = selectedProvince?.districts || [];
   const selectedDistrict = districts.find((d) => d.name === district);
@@ -316,7 +317,7 @@ const Cart = () => {
                     value={streetAddress}
                     onChange={(e) => setStreetAddress(e.target.value)}
                   />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${hasAddressDirectory ? "" : "hidden"}`}>
                     <select
                       className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                       value={province}
@@ -347,7 +348,7 @@ const Cart = () => {
                     </select>
                   </div>
                   <select
-                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none disabled:bg-gray-50 disabled:text-gray-400 ${hasAddressDirectory ? "" : "hidden"}`}
                     value={ward}
                     onChange={(e) => setWard(e.target.value)}
                     disabled={!district}
@@ -357,6 +358,28 @@ const Cart = () => {
                       <option key={w.code} value={w.name}>{w.name}</option>
                     ))}
                   </select>
+                  {!hasAddressDirectory && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                        placeholder="Tinh/Thanh"
+                        value={province}
+                        onChange={(e) => setProvince(e.target.value)}
+                      />
+                      <input
+                        className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                        placeholder="Quan/Huyen"
+                        value={district}
+                        onChange={(e) => setDistrict(e.target.value)}
+                      />
+                      <input
+                        className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none sm:col-span-2"
+                        placeholder="Phuong/Xa"
+                        value={ward}
+                        onChange={(e) => setWard(e.target.value)}
+                      />
+                    </div>
+                  )}
                   {addressLoading && <p className="text-xs text-gray-500">Đang tải danh sách địa chỉ toàn quốc...</p>}
 
                   <div className="space-y-3 pt-2">

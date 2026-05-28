@@ -25,6 +25,14 @@ export const buildVerificationUrl = (token: string) => {
 
 export const isEmailConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
+const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 export const sendVerificationEmail = async ({ to, fullName, token }: VerificationEmailInput) => {
   if (!isEmailConfigured()) {
     throw new Error("SMTP_USER and SMTP_PASS must be configured before sending email.");
@@ -35,6 +43,8 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
   const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
   const from = process.env.SMTP_FROM || `"BookHaven" <${process.env.SMTP_USER}>`;
   const verificationUrl = buildVerificationUrl(token);
+  const safeFullName = escapeHtml(fullName);
+  const safeVerificationUrl = escapeHtml(verificationUrl);
   const smtpPass = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
 
   const transporter = nodemailer.createTransport({
@@ -65,10 +75,10 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
         <h2>Xac nhan dang ky BookHaven</h2>
-        <p>Xin chao ${fullName},</p>
+        <p>Xin chao ${safeFullName},</p>
         <p>Cam on ban da dang ky BookHaven. Bam nut ben duoi de xac nhan email va kich hoat tai khoan.</p>
         <p>
-          <a href="${verificationUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">
+          <a href="${safeVerificationUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">
             Xac nhan email
           </a>
         </p>

@@ -281,7 +281,7 @@ const AdminBooks = () => {
         />
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-sm border overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead className="bg-gray-50 border-b">
             <tr>
@@ -451,57 +451,79 @@ const AdminOrders = () => {
     }
   };
 
+  const getPaymentStatus = (status?: string) => {
+    switch (status) {
+      case "paid":
+        return { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700" };
+      case "pending":
+        return { label: "Chờ thanh toán", className: "bg-amber-100 text-amber-700" };
+      case "unpaid":
+      default:
+        return { label: "Chưa thanh toán", className: "bg-gray-100 text-gray-700" };
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Quản lý đơn hàng</h2>
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left border-collapse">
+        <table className="w-full min-w-[920px] text-left border-collapse">
           <thead className="bg-gray-50 border-b">
             <tr>
               <th className="px-6 py-4 text-sm font-bold text-gray-600">Mã ĐH</th>
               <th className="px-6 py-4 text-sm font-bold text-gray-600">Khách hàng</th>
               <th className="px-6 py-4 text-sm font-bold text-gray-600">SĐT</th>
               <th className="px-6 py-4 text-sm font-bold text-gray-600">Tổng tiền</th>
+              <th className="px-6 py-4 text-sm font-bold text-gray-600">Thanh toán</th>
               <th className="px-6 py-4 text-sm font-bold text-gray-600">Trạng thái</th>
               <th className="px-6 py-4 text-sm font-bold text-gray-600 text-right">Thao tác</th>
             </tr>
           </thead>
           <tbody className="divide-y">
-            {orders.map(order => (
-              <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-6 py-4 font-bold text-gray-900">#ORD-{order.id}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{order.user_email}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{order.phone || "-"}</td>
-                <td className="px-6 py-4 text-sm font-bold text-indigo-600">
-                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}
-                </td>
-                <td className="px-6 py-4">
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                    order.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                    order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                    'bg-yellow-100 text-yellow-700'
-                  }`}>
-                    {order.status}
-                  </span>
-                </td>
-                <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                  <Link to={`/orders/${order.id}`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg">
-                    <ChevronRight size={18} />
-                  </Link>
-                  <select 
-                    className="text-sm border rounded p-1"
-                    value={order.status}
-                    onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                  >
-                    <option value="pending">Chờ xử lý</option>
-                    <option value="processing">Đang xử lý</option>
-                    <option value="shipped">Đang giao</option>
-                    <option value="delivered">Đã giao</option>
-                    <option value="cancelled">Đã hủy</option>
-                  </select>
-                </td>
-              </tr>
-            ))}
+            {orders.map(order => {
+              const paymentStatus = getPaymentStatus(order.payment_status);
+
+              return (
+                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4 font-bold text-gray-900">#ORD-{order.id}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{order.user_email}</td>
+                  <td className="px-6 py-4 text-sm text-gray-600">{order.phone || "-"}</td>
+                  <td className="px-6 py-4 text-sm font-bold text-indigo-600">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${paymentStatus.className}`}>
+                      {paymentStatus.label}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                      order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                      'bg-yellow-100 text-yellow-700'
+                    }`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
+                    <Link to={`/orders/${order.id}`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg">
+                      <ChevronRight size={18} />
+                    </Link>
+                    <select
+                      className="text-sm border rounded p-1"
+                      value={order.status}
+                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                    >
+                      <option value="pending">Chờ xử lý</option>
+                      <option value="processing">Đang xử lý</option>
+                      <option value="shipped">Đang giao</option>
+                      <option value="delivered">Đã giao</option>
+                      <option value="cancelled">Đã hủy</option>
+                    </select>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -623,14 +645,18 @@ const AdminCategories = () => {
 };
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!user || (user.role !== "admin" && user.role !== "super_admin")) {
+    if (!loading && (!user || (user.role !== "admin" && user.role !== "super_admin"))) {
       navigate("/");
     }
-  }, [user, navigate]);
+  }, [loading, user, navigate]);
+
+  if (loading || !user || (user.role !== "admin" && user.role !== "super_admin")) {
+    return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
+  }
 
   return (
     <div className="flex flex-col md:flex-row gap-8">

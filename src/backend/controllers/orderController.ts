@@ -106,7 +106,7 @@ export const createOrder = (req: AuthRequest, res: Response) => {
     }
 
     const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-    const paymentStatus = paymentMethod === "cod" ? "paid" : "pending";
+    const paymentStatus = paymentMethod === "cod" ? "unpaid" : "pending";
     const transaction = db.transaction(() => {
       const orderResult = db.prepare(`
         INSERT INTO orders (user_id, total_price, shipping_address, phone, payment_method, payment_status)
@@ -207,6 +207,9 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
       }
 
       db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, req.params.id);
+      if (status === "delivered") {
+        db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND payment_method = 'cod'").run(req.params.id);
+      }
     });
 
     transaction();

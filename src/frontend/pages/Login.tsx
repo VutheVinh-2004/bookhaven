@@ -8,13 +8,16 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setNotice("");
     setLoading(true);
     try {
       const data = await authService.login({ email, password });
@@ -24,6 +27,22 @@ const Login = () => {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email.trim()) return;
+
+    setError("");
+    setNotice("");
+    setResending(true);
+    try {
+      await authService.resendVerification(email);
+      setNotice("Da gui lai email xac nhan. Vui long kiem tra hop thu cua ban.");
+    } catch (err: any) {
+      setError(err.message || "Khong the gui lai email xac nhan.");
+    } finally {
+      setResending(false);
     }
   };
 
@@ -39,6 +58,12 @@ const Login = () => {
           <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 flex items-center gap-2">
             <AlertCircle size={20} />
             <span className="text-sm font-medium">{error}</span>
+          </div>
+        )}
+
+        {notice && (
+          <div className="bg-emerald-50 text-emerald-700 p-4 rounded-lg mb-6 text-sm font-medium">
+            {notice}
           </div>
         )}
 
@@ -80,6 +105,16 @@ const Login = () => {
           >
             {loading ? "Đang xử lý..." : "Đăng nhập"}
           </button>
+          {error && email.trim() && (
+            <button
+              type="button"
+              disabled={resending}
+              onClick={handleResendVerification}
+              className="w-full border border-indigo-200 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors disabled:opacity-50"
+            >
+              {resending ? "Dang gui..." : "Gui lai email xac nhan"}
+            </button>
+          )}
         </form>
 
         <div className="mt-8 text-center text-sm text-gray-500">

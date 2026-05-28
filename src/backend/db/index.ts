@@ -98,7 +98,7 @@ export function initDb() {
   }
   if (!hasColumn("orders", "payment_status")) {
     db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid'");
-    db.prepare("UPDATE orders SET payment_status = 'paid' WHERE payment_method = 'cod'").run();
+    db.prepare("UPDATE orders SET payment_status = 'unpaid' WHERE payment_method = 'cod'").run();
   }
 
   // Order Items table

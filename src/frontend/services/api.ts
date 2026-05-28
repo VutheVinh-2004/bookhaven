@@ -41,6 +41,7 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
 export const authService = {
   login: (credentials: any) => fetchApi("/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
   register: (userData: any) => fetchApi("/auth/register", { method: "POST", body: JSON.stringify(userData) }),
+  resendVerification: (email: string) => fetchApi("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
   verifyEmail: (token: string) => fetchApi("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),
   rejectEmail: (token: string) => fetchApi("/auth/reject-email", { method: "POST", body: JSON.stringify({ token }) }),
   getProfile: () => fetchApi("/auth/profile"),

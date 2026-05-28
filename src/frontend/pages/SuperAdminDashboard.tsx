@@ -10,7 +10,7 @@ const SuperAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showOnlyAdmins, setShowOnlyAdmins] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const fetchUsers = () => {
@@ -23,12 +23,13 @@ const SuperAdminDashboard = () => {
   };
 
   useEffect(() => {
+    if (authLoading) return;
     if (!currentUser || currentUser.role !== "super_admin") {
       navigate("/");
       return;
     }
     fetchUsers();
-  }, [currentUser, navigate]);
+  }, [authLoading, currentUser, navigate]);
 
   useEffect(() => {
     let filtered = allUsers;
@@ -43,6 +44,10 @@ const SuperAdminDashboard = () => {
     }
     setFilteredUsers(filtered);
   }, [allUsers, showOnlyAdmins, searchTerm]);
+
+  if (authLoading || !currentUser || currentUser.role !== "super_admin") {
+    return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div></div>;
+  }
 
   const handleRoleUpdate = async (id: number, role: string) => {
     try {
