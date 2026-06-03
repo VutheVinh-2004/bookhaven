@@ -18,7 +18,7 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
     if (error?.name === "AbortError") {
       throw new Error("Máy chủ phản hồi quá lâu. Vui lòng khởi động lại server rồi thử lại.");
     }
-    throw error;
+    throw new Error("Không thể kết nối đến máy chủ. Vui lòng kiểm tra server đang chạy rồi thử lại.");
   } finally {
     window.clearTimeout(timeoutId);
   }
@@ -42,6 +42,8 @@ export const authService = {
   login: (credentials: any) => fetchApi("/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
   register: (userData: any) => fetchApi("/auth/register", { method: "POST", body: JSON.stringify(userData) }),
   resendVerification: (email: string) => fetchApi("/auth/resend-verification", { method: "POST", body: JSON.stringify({ email }) }),
+  forgotPassword: (email: string) => fetchApi("/auth/forgot-password", { method: "POST", body: JSON.stringify({ email }) }),
+  resetPassword: (data: { email: string; otp: string; newPassword: string }) => fetchApi("/auth/reset-password", { method: "POST", body: JSON.stringify(data) }),
   verifyEmail: (token: string) => fetchApi("/auth/verify-email", { method: "POST", body: JSON.stringify({ token }) }),
   rejectEmail: (token: string) => fetchApi("/auth/reject-email", { method: "POST", body: JSON.stringify({ token }) }),
   getProfile: () => fetchApi("/auth/profile"),
@@ -58,6 +60,14 @@ export const bookService = {
   create: (data: any) => fetchApi("/admin/books", { method: "POST", body: JSON.stringify(data) }),
   update: (id: string, data: any) => fetchApi(`/admin/books/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   delete: (id: string) => fetchApi(`/admin/books/${id}`, { method: "DELETE" }),
+};
+
+export const reviewService = {
+  getByBook: (bookId: string) => fetchApi(`/books/${bookId}/reviews`),
+  getEligibility: (bookId: string) => fetchApi(`/books/${bookId}/reviews/eligibility`),
+  save: (bookId: string, data: { rating: number; comment: string }) =>
+    fetchApi(`/books/${bookId}/reviews`, { method: "POST", body: JSON.stringify(data) }),
+  remove: (bookId: string) => fetchApi(`/books/${bookId}/reviews`, { method: "DELETE" }),
 };
 
 export const cartService = {
@@ -79,8 +89,8 @@ export const orderService = {
 };
 
 export const userService = {
-  getAll: (status: "all" | "active" | "inactive" = "all") => fetchApi(`/superadmin/users?status=${status}`),
-  updateRole: (id: number, role: string) => fetchApi(`/superadmin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
-  reactivate: (id: number) => fetchApi(`/superadmin/users/${id}/reactivate`, { method: "PUT" }),
-  delete: (id: number) => fetchApi(`/superadmin/users/${id}`, { method: "DELETE" }),
+  getAll: (status: "all" | "active" | "inactive" = "all") => fetchApi(`/admin/users?status=${status}`),
+  updateRole: (id: number, role: string) => fetchApi(`/admin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
+  reactivate: (id: number) => fetchApi(`/admin/users/${id}/reactivate`, { method: "PUT" }),
+  delete: (id: number) => fetchApi(`/admin/users/${id}`, { method: "DELETE" }),
 };

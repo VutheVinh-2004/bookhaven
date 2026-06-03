@@ -45,7 +45,6 @@ export async function seed() {
   
   insertUser.run("user@example.com", hashedPassword, "Người dùng mẫu", "user");
   insertUser.run("admin@example.com", hashedPassword, "Quản trị viên", "admin");
-  insertUser.run("superadmin@example.com", hashedPassword, "Siêu quản trị", "super_admin");
 
   // Seed Books
   const insertBook = db.prepare(`

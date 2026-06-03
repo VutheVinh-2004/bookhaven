@@ -7,6 +7,12 @@ type VerificationEmailInput = {
   token: string;
 };
 
+type PasswordResetOtpEmailInput = {
+  to: string;
+  fullName: string;
+  otp: string;
+};
+
 const getFrontendUrl = () => (process.env.FRONTEND_URL || "http://localhost:3000").replace(/\/$/, "");
 
 export const createEmailVerificationToken = () => crypto.randomBytes(32).toString("hex");
@@ -33,7 +39,7 @@ const escapeHtml = (value: string) =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-export const sendVerificationEmail = async ({ to, fullName, token }: VerificationEmailInput) => {
+const createTransporter = () => {
   if (!isEmailConfigured()) {
     throw new Error("SMTP_USER and SMTP_PASS must be configured before sending email.");
   }
@@ -41,13 +47,9 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT || 465);
   const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
-  const from = process.env.SMTP_FROM || `"BookHaven" <${process.env.SMTP_USER}>`;
-  const verificationUrl = buildVerificationUrl(token);
-  const safeFullName = escapeHtml(fullName);
-  const safeVerificationUrl = escapeHtml(verificationUrl);
   const smtpPass = (process.env.SMTP_PASS || "").replace(/\s+/g, "");
 
-  const transporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host,
     port,
     secure,
@@ -59,9 +61,18 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
       pass: smtpPass
     }
   });
+};
+
+const getMailFrom = () => process.env.SMTP_FROM || `"BookHaven" <${process.env.SMTP_USER}>`;
+
+export const sendVerificationEmail = async ({ to, fullName, token }: VerificationEmailInput) => {
+  const verificationUrl = buildVerificationUrl(token);
+  const safeFullName = escapeHtml(fullName);
+  const safeVerificationUrl = escapeHtml(verificationUrl);
+  const transporter = createTransporter();
 
   const info = await transporter.sendMail({
-    from,
+    from: getMailFrom(),
     to,
     subject: "Xác nhận đăng ký tài khoản BookHaven",
     text: [
@@ -93,5 +104,40 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
     accepted: info.accepted,
     rejected: info.rejected,
     response: info.response
+  });
+};
+
+export const sendPasswordResetOtpEmail = async ({ to, fullName, otp }: PasswordResetOtpEmailInput) => {
+  const safeFullName = escapeHtml(fullName);
+  const safeOtp = escapeHtml(otp);
+  const transporter = createTransporter();
+
+  const info = await transporter.sendMail({
+    from: getMailFrom(),
+    to,
+    subject: "Mã OTP đặt lại mật khẩu BookHaven",
+    text: [
+      `Xin chào ${fullName},`,
+      "",
+      `Mã OTP đặt lại mật khẩu BookHaven của bạn là: ${otp}`,
+      "",
+      "Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai."
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
+        <h2>Đặt lại mật khẩu BookHaven</h2>
+        <p>Xin chào ${safeFullName},</p>
+        <p>Sử dụng mã OTP dưới đây để đặt lại mật khẩu:</p>
+        <p style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#4f46e5">${safeOtp}</p>
+        <p>Mã có hiệu lực trong 10 phút. Không chia sẻ mã này với bất kỳ ai.</p>
+      </div>
+    `
+  });
+
+  console.log("Password reset OTP email sent:", {
+    to,
+    messageId: info.messageId,
+    accepted: info.accepted,
+    rejected: info.rejected
   });
 };

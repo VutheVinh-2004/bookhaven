@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
 import db from "../db/index.ts";
 import { AuthRequest, signToken } from "../middleware/auth.ts";
 import { created, fail, ok } from "../utils/response.ts";
@@ -9,6 +10,7 @@ import {
   createEmailVerificationToken,
   getEmailVerificationExpiry,
   isEmailConfigured,
+  sendPasswordResetOtpEmail,
   sendVerificationEmail
 } from "../services/emailService.ts";
 
@@ -19,6 +21,11 @@ const publicUser = (user: any) => ({
   fullName: user.full_name ?? user.fullName ?? ""
 });
 
+const createPasswordResetOtp = () => crypto.randomInt(100000, 1000000).toString();
+const hashPasswordResetOtp = (email: string, otp: string) =>
+  crypto.createHash("sha256").update(`${email}:${otp}:${process.env.JWT_SECRET || ""}`).digest("hex");
+const getPasswordResetExpiry = () => new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
 export const register = async (req: Request, res: Response) => {
   const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
   const password = req.body.password;
@@ -26,7 +33,7 @@ export const register = async (req: Request, res: Response) => {
   const errors: ValidationErrors = {};
 
   if (!isEmail(email)) errors.email = "Email không đúng định dạng.";
-  if (!isStrongPassword(password)) errors.password = "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ và số.";
+  if (!isStrongPassword(password)) errors.password = "Mật khẩu phải từ 8 đến 200 ký tự, gồm chữ và số.";
   if (!isValidFullName(fullName, 2, 100)) errors.fullName = "Họ tên chỉ được chứa chữ và khoảng trắng, dài từ 2 đến 100 ký tự.";
   if (hasErrors(errors)) return fail(res, 400, "Dữ liệu đăng ký không hợp lệ.", errors);
 
@@ -140,9 +147,124 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
   }
 };
 
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
+  if (!isEmail(email)) return fail(res, 400, "Email không đúng định dạng.", { email: "Email không đúng định dạng." });
+
+  const genericMessage = "Nếu email tồn tại, BookHaven sẽ gửi mã OTP đặt lại mật khẩu.";
+
+  try {
+    const user = db.prepare(
+      "SELECT id, email, full_name, email_verified, is_active FROM users WHERE email = ?"
+    ).get(email) as any;
+
+    if (!user || !user.is_active) {
+      return ok(res, null, genericMessage);
+    }
+
+    if (!isEmailConfigured()) {
+      return fail(res, 500, "Hệ thống gửi email chưa được cấu hình.");
+    }
+
+    const otp = createPasswordResetOtp();
+    const otpHash = hashPasswordResetOtp(email, otp);
+    db.prepare(`
+      UPDATE users
+      SET password_reset_otp_hash = ?,
+          password_reset_expires_at = ?,
+          password_reset_attempts = 0
+      WHERE id = ?
+    `).run(otpHash, getPasswordResetExpiry(), user.id);
+
+    try {
+      await sendPasswordResetOtpEmail({
+        to: user.email,
+        fullName: user.full_name || user.email,
+        otp
+      });
+    } catch (emailError) {
+      db.prepare(`
+        UPDATE users
+        SET password_reset_otp_hash = NULL,
+            password_reset_expires_at = NULL,
+            password_reset_attempts = 0
+        WHERE id = ?
+      `).run(user.id);
+      throw emailError;
+    }
+
+    return ok(res, null, genericMessage);
+  } catch (error) {
+    console.error("Request password reset error:", error);
+    return fail(res, 500, "Không thể gửi mã OTP. Vui lòng thử lại sau.");
+  }
+};
+
+export const resetPasswordWithOtp = async (req: Request, res: Response) => {
+  const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
+  const otp = typeof req.body.otp === "string" ? req.body.otp.trim() : "";
+  const newPassword = req.body.newPassword;
+  const errors: ValidationErrors = {};
+
+  if (!isEmail(email)) errors.email = "Email không đúng định dạng.";
+  if (!/^[0-9]{6}$/.test(otp)) errors.otp = "Mã OTP phải gồm 6 chữ số.";
+  if (!isStrongPassword(newPassword)) errors.newPassword = "Mật khẩu mới phải từ 8 đến 200 ký tự, gồm chữ và số.";
+  if (hasErrors(errors)) return fail(res, 400, "Dữ liệu đặt lại mật khẩu không hợp lệ.", errors);
+
+  try {
+    const user = db.prepare(`
+      SELECT id, password_reset_otp_hash, password_reset_expires_at, password_reset_attempts
+      FROM users
+      WHERE email = ? AND is_active = 1
+    `).get(email) as any;
+
+    if (!user || !user.password_reset_otp_hash || !user.password_reset_expires_at) {
+      return fail(res, 400, "Mã OTP không hợp lệ hoặc đã hết hạn.", { otp: "Mã OTP không hợp lệ hoặc đã hết hạn." });
+    }
+
+    if (user.password_reset_attempts >= 5 || new Date(user.password_reset_expires_at).getTime() < Date.now()) {
+      db.prepare(`
+        UPDATE users
+        SET password_reset_otp_hash = NULL,
+            password_reset_expires_at = NULL,
+            password_reset_attempts = 0
+        WHERE id = ?
+      `).run(user.id);
+      return fail(res, 400, "Mã OTP không hợp lệ hoặc đã hết hạn.", { otp: "Mã OTP không hợp lệ hoặc đã hết hạn." });
+    }
+
+    const otpHash = hashPasswordResetOtp(email, otp);
+    const otpMatches = typeof user.password_reset_otp_hash === "string"
+      && user.password_reset_otp_hash.length === otpHash.length
+      && crypto.timingSafeEqual(Buffer.from(otpHash), Buffer.from(user.password_reset_otp_hash));
+    if (!otpMatches) {
+      db.prepare("UPDATE users SET password_reset_attempts = password_reset_attempts + 1 WHERE id = ?").run(user.id);
+      return fail(res, 400, "Mã OTP không chính xác.", { otp: "Mã OTP không chính xác." });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    db.prepare(`
+      UPDATE users
+      SET password = ?,
+          email_verified = 1,
+          email_verification_token = NULL,
+          email_verification_expires_at = NULL,
+          password_reset_otp_hash = NULL,
+          password_reset_expires_at = NULL,
+          password_reset_attempts = 0
+      WHERE id = ?
+    `).run(hashedPassword, user.id);
+
+    return ok(res, null, "Đặt lại mật khẩu thành công. Bạn có thể đăng nhập bằng mật khẩu mới.");
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return fail(res, 500, "Không thể đặt lại mật khẩu. Vui lòng thử lại sau.");
+  }
+};
+
 export const verifyEmail = async (req: Request, res: Response) => {
   const token = typeof req.body.token === "string" ? req.body.token.trim() : "";
-  if (!token) return fail(res, 400, "Thiếu mã xác nhận email.");
+  if (!isNonEmptyString(token, 1, 256)) return fail(res, 400, "Mã xác nhận email không hợp lệ.");
 
   try {
     const user = db.prepare(
@@ -174,7 +296,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
 
 export const rejectEmail = async (req: Request, res: Response) => {
   const token = typeof req.body.token === "string" ? req.body.token.trim() : "";
-  if (!token) return fail(res, 400, "Thiếu mã xác nhận email.");
+  if (!isNonEmptyString(token, 1, 256)) return fail(res, 400, "Mã xác nhận email không hợp lệ.");
 
   try {
     const user = db.prepare(
@@ -211,14 +333,15 @@ export const getProfile = async (req: AuthRequest, res: Response) => {
 
 export const updateProfile = async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
+  const hasFullName = Object.prototype.hasOwnProperty.call(req.body, "fullName");
   const fullName = trimText(req.body.fullName);
   const currentPassword = req.body.currentPassword;
   const newPassword = req.body.newPassword;
   const errors: ValidationErrors = {};
 
-  if (fullName && !isValidFullName(fullName, 2, 100)) errors.fullName = "Họ tên chỉ được chứa chữ và khoảng trắng, dài từ 2 đến 100 ký tự.";
-  if (newPassword && !isStrongPassword(newPassword)) errors.newPassword = "Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ và số.";
-  if (newPassword && !currentPassword) errors.currentPassword = "Cần nhập mật khẩu hiện tại để đổi mật khẩu.";
+  if (hasFullName && !isValidFullName(fullName, 2, 100)) errors.fullName = "Họ tên chỉ được chứa chữ và khoảng trắng, dài từ 2 đến 100 ký tự.";
+  if (newPassword && !isStrongPassword(newPassword)) errors.newPassword = "Mật khẩu mới phải từ 8 đến 200 ký tự, gồm chữ và số.";
+  if (newPassword && !isNonEmptyString(currentPassword, 1, 200)) errors.currentPassword = "Cần nhập mật khẩu hiện tại để đổi mật khẩu.";
   if (hasErrors(errors)) return fail(res, 400, "Dữ liệu cập nhật không hợp lệ.", errors);
 
   try {
@@ -232,7 +355,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       hashedPassword = await bcrypt.hash(newPassword, 12);
     }
 
-    const updatedFullName = fullName || user.full_name;
+    const updatedFullName = hasFullName ? fullName : user.full_name;
     db.prepare("UPDATE users SET full_name = ?, password = ? WHERE id = ?").run(updatedFullName, hashedPassword, userId);
     return ok(res, publicUser({ ...user, full_name: updatedFullName }), "Cập nhật thông tin thành công.");
   } catch (error) {

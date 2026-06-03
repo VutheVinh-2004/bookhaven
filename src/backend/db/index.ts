@@ -32,9 +32,9 @@ export function initDb() {
       title TEXT NOT NULL,
       author TEXT NOT NULL,
       description TEXT,
-      price REAL NOT NULL,
+      price REAL NOT NULL CHECK(price > 0),
       category_id INTEGER,
-      stock INTEGER DEFAULT 0,
+      stock INTEGER DEFAULT 0 CHECK(stock >= 0),
       image_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (category_id) REFERENCES categories (id)
@@ -48,10 +48,13 @@ export function initDb() {
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
       full_name TEXT,
-      role TEXT CHECK(role IN ('user', 'admin', 'super_admin')) DEFAULT 'user',
+      role TEXT CHECK(role IN ('user', 'admin')) DEFAULT 'user',
       email_verified INTEGER NOT NULL DEFAULT 0,
       email_verification_token TEXT,
       email_verification_expires_at DATETIME,
+      password_reset_otp_hash TEXT,
+      password_reset_expires_at DATETIME,
+      password_reset_attempts INTEGER NOT NULL DEFAULT 0,
       is_active INTEGER NOT NULL DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -70,16 +73,26 @@ export function initDb() {
   if (!hasColumn("users", "is_active")) {
     db.exec("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1");
   }
+  if (!hasColumn("users", "password_reset_otp_hash")) {
+    db.exec("ALTER TABLE users ADD COLUMN password_reset_otp_hash TEXT");
+  }
+  if (!hasColumn("users", "password_reset_expires_at")) {
+    db.exec("ALTER TABLE users ADD COLUMN password_reset_expires_at DATETIME");
+  }
+  if (!hasColumn("users", "password_reset_attempts")) {
+    db.exec("ALTER TABLE users ADD COLUMN password_reset_attempts INTEGER NOT NULL DEFAULT 0");
+  }
   if (addedEmailVerified) {
     db.prepare("UPDATE users SET email_verified = 1 WHERE email_verified = 0").run();
   }
+  db.prepare("UPDATE users SET role = 'admin' WHERE role = 'super_admin'").run();
 
   // Orders table
   db.exec(`
     CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
-      total_price REAL NOT NULL,
+      total_price REAL NOT NULL CHECK(total_price > 0),
       status TEXT CHECK(status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')) DEFAULT 'pending',
       shipping_address TEXT,
       phone TEXT,
@@ -116,8 +129,8 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
       book_id INTEGER NOT NULL,
-      quantity INTEGER NOT NULL,
-      price REAL NOT NULL,
+      quantity INTEGER NOT NULL CHECK(quantity > 0),
+      price REAL NOT NULL CHECK(price > 0),
       FOREIGN KEY (order_id) REFERENCES orders (id) ON DELETE CASCADE,
       FOREIGN KEY (book_id) REFERENCES books (id)
     )
@@ -129,11 +142,93 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       book_id INTEGER NOT NULL,
-      quantity INTEGER NOT NULL DEFAULT 1,
+      quantity INTEGER NOT NULL DEFAULT 1 CHECK(quantity > 0),
       FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
       FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
       UNIQUE(user_id, book_id)
     )
+  `);
+
+  // Product reviews table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS book_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      book_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+      comment TEXT NOT NULL CHECK(length(trim(comment)) BETWEEN 1 AND 1000),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+      UNIQUE(book_id, user_id)
+    )
+  `);
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_book_reviews_book_id
+    ON book_reviews (book_id, created_at DESC)
+  `);
+
+  // Protect existing databases that were created before CHECK constraints were added.
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS validate_books_insert
+    BEFORE INSERT ON books
+    WHEN NEW.price <= 0 OR NEW.stock < 0 OR typeof(NEW.stock) != 'integer'
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid book numeric values');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_books_update
+    BEFORE UPDATE OF price, stock ON books
+    WHEN NEW.price <= 0 OR NEW.stock < 0 OR typeof(NEW.stock) != 'integer'
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid book numeric values');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_cart_items_insert
+    BEFORE INSERT ON cart_items
+    WHEN NEW.quantity <= 0 OR typeof(NEW.quantity) != 'integer'
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid cart quantity');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_cart_items_update
+    BEFORE UPDATE OF quantity ON cart_items
+    WHEN NEW.quantity <= 0 OR typeof(NEW.quantity) != 'integer'
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid cart quantity');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_order_items_insert
+    BEFORE INSERT ON order_items
+    WHEN NEW.quantity <= 0 OR typeof(NEW.quantity) != 'integer' OR NEW.price <= 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid order item values');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_orders_insert
+    BEFORE INSERT ON orders
+    WHEN NEW.total_price <= 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid order total');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_book_reviews_insert
+    BEFORE INSERT ON book_reviews
+    WHEN NEW.rating < 1 OR NEW.rating > 5 OR typeof(NEW.rating) != 'integer'
+      OR length(trim(NEW.comment)) < 1 OR length(trim(NEW.comment)) > 1000
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid book review');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_book_reviews_update
+    BEFORE UPDATE OF rating, comment ON book_reviews
+    WHEN NEW.rating < 1 OR NEW.rating > 5 OR typeof(NEW.rating) != 'integer'
+      OR length(trim(NEW.comment)) < 1 OR length(trim(NEW.comment)) > 1000
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid book review');
+    END;
   `);
 }
 

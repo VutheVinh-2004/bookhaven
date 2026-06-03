@@ -14,7 +14,7 @@ const getJwtSecret = () => {
 export interface AuthUser {
   id: number;
   email: string;
-  role: "user" | "admin" | "super_admin";
+  role: "user" | "admin";
 }
 
 export interface AuthRequest extends Request {

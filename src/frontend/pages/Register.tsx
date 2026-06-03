@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { authService } from "../services/api.ts";
 import { Mail, Lock, User, AlertCircle, CheckCircle2 } from "lucide-react";
+import { isStrongPassword, isValidFullName } from "../utils/validation.ts";
 
 const Register = () => {
   const [email, setEmail] = useState("");
@@ -23,19 +24,13 @@ const Register = () => {
     const trimmedEmail = email.trim();
     const clientErrors: Record<string, string> = {};
 
-    if (trimmedFullName.length < 2 || trimmedFullName.length > 100) {
-      clientErrors.fullName = "Họ tên phải từ 2 đến 100 ký tự.";
-    } else if (!/^[A-Za-zÀ-ỹ\s]+$/u.test(trimmedFullName)) {
-      clientErrors.fullName = "Họ tên chỉ được chứa chữ và khoảng trắng.";
-    }
+    if (!isValidFullName(trimmedFullName)) clientErrors.fullName = "Họ tên chỉ được chứa chữ và dấu cách, dài từ 2 đến 100 ký tự.";
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       clientErrors.email = "Email không đúng định dạng.";
     }
 
-    if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
-      clientErrors.password = "Mật khẩu phải có ít nhất 8 ký tự, gồm chữ và số.";
-    }
+    if (!isStrongPassword(password)) clientErrors.password = "Mật khẩu phải từ 8 đến 200 ký tự, gồm chữ và số.";
 
     if (password !== confirmPassword) {
       clientErrors.confirmPassword = "Mật khẩu nhập lại không khớp.";
@@ -93,10 +88,23 @@ const Register = () => {
               <input
                 type="text"
                 required
+                maxLength={100}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="Nguyễn Văn A"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (/\d/.test(value)) {
+                    setFieldErrors((current) => ({ ...current, fullName: "Họ tên không được chứa số." }));
+                  } else {
+                    setFieldErrors((current) => {
+                      const next = { ...current };
+                      delete next.fullName;
+                      return next;
+                    });
+                  }
+                  setFullName(value.replace(/\d/g, ""));
+                }}
               />
               <User className="absolute left-3 top-3.5 text-gray-400 h-5 w-5" />
             </div>
@@ -109,6 +117,7 @@ const Register = () => {
               <input
                 type="email"
                 required
+                maxLength={254}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="email@gmail.com"
                 value={email}
@@ -125,6 +134,7 @@ const Register = () => {
               <input
                 type="password"
                 required
+                maxLength={200}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="••••••••"
                 value={password}
@@ -141,6 +151,7 @@ const Register = () => {
               <input
                 type="password"
                 required
+                maxLength={200}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="••••••••"
                 value={confirmPassword}

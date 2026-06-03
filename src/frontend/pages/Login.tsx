@@ -77,6 +77,7 @@ const Login = () => {
               <input
                 type="email"
                 required
+                maxLength={254}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="email@example.com"
                 value={email}
@@ -88,11 +89,15 @@ const Login = () => {
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">Mật khẩu</label>
+            <div className="flex items-center justify-between gap-3">
+              <label className="text-sm font-semibold text-gray-700">Mật khẩu</label>
+              <Link to="/forgot-password" className="text-xs font-bold text-indigo-600 hover:underline">Quên mật khẩu?</Link>
+            </div>
             <div className="relative">
               <input
                 type="password"
                 required
+                maxLength={200}
                 className="w-full pl-10 pr-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 placeholder="••••••••"
                 value={password}

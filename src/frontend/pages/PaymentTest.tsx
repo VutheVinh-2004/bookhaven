@@ -184,10 +184,10 @@ const PaymentTest = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <input className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Số thẻ" value={cardNumber} onChange={(e) => setCardNumber(e.target.value)} />
-                  <input className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tên chủ thẻ" value={cardHolder} onChange={(e) => setCardHolder(e.target.value)} />
-                  <input className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="MM/YY" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
-                  <input className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="CVV" value={cvv} onChange={(e) => setCvv(e.target.value)} />
+                  <input inputMode="numeric" maxLength={19} className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Số thẻ" value={cardNumber} onChange={(e) => setCardNumber(normalizeDigits(e.target.value))} />
+                  <input maxLength={100} className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="Tên chủ thẻ" value={cardHolder} onChange={(e) => setCardHolder(e.target.value)} />
+                  <input maxLength={5} className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="MM/YY" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
+                  <input inputMode="numeric" maxLength={4} className="p-3 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500" placeholder="CVV" value={cvv} onChange={(e) => setCvv(normalizeDigits(e.target.value))} />
                 </div>
                 {cardError && <p className="text-sm font-semibold text-red-600">{cardError}</p>}
                 <button type="button" onClick={handleContinueToOtp} className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold hover:bg-indigo-700 transition-colors">

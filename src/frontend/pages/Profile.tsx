@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { authService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { User, Lock, CheckCircle, AlertCircle } from "lucide-react";
+import { isStrongPassword, isValidFullName } from "../utils/validation.ts";
 
 const Profile = () => {
   const { user, login } = useAuth();
@@ -12,13 +13,6 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-
-  const isValidFullName = (value: string) => {
-    const trimmed = value.trim();
-    return trimmed.length >= 2 && trimmed.length <= 100 && /^[A-Za-zÀ-ỹ\s]+$/u.test(trimmed);
-  };
-
-  const isStrongPassword = (value: string) => value.length >= 8 && /[A-Za-z]/.test(value) && /\d/.test(value);
 
   useEffect(() => {
     if (user) {
@@ -42,7 +36,7 @@ const Profile = () => {
     }
 
     if (newPassword && !isStrongPassword(newPassword)) {
-      setFieldErrors({ newPassword: "Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ và số." });
+      setFieldErrors({ newPassword: "Mật khẩu mới phải từ 8 đến 200 ký tự, gồm chữ và số." });
       return;
     }
 
@@ -107,9 +101,22 @@ const Profile = () => {
               <input
                 type="text"
                 required
+                maxLength={100}
                 className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (/\d/.test(value)) {
+                    setFieldErrors((current) => ({ ...current, fullName: "Họ tên không được chứa số." }));
+                  } else {
+                    setFieldErrors((current) => {
+                      const next = { ...current };
+                      delete next.fullName;
+                      return next;
+                    });
+                  }
+                  setFullName(value.replace(/\d/g, ""));
+                }}
               />
               {fieldErrors.fullName && <p className="text-xs font-medium text-red-600">{fieldErrors.fullName}</p>}
             </div>
@@ -125,6 +132,7 @@ const Profile = () => {
                   <label className="text-sm font-semibold text-gray-700">Mật khẩu hiện tại</label>
                   <input
                     type="password"
+                    maxLength={200}
                     className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                     placeholder="••••••••"
                     value={currentPassword}
@@ -138,6 +146,7 @@ const Profile = () => {
                     <label className="text-sm font-semibold text-gray-700">Mật khẩu mới</label>
                     <input
                       type="password"
+                      maxLength={200}
                       className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       placeholder="••••••••"
                       value={newPassword}
@@ -149,6 +158,7 @@ const Profile = () => {
                     <label className="text-sm font-semibold text-gray-700">Nhập lại mật khẩu mới</label>
                     <input
                       type="password"
+                      maxLength={200}
                       className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                       placeholder="••••••••"
                       value={confirmPassword}

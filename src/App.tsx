@@ -7,6 +7,7 @@ import Home from "./frontend/pages/Home.tsx";
 import Login from "./frontend/pages/Login.tsx";
 import Register from "./frontend/pages/Register.tsx";
 import VerifyEmail from "./frontend/pages/VerifyEmail.tsx";
+import ForgotPassword from "./frontend/pages/ForgotPassword.tsx";
 import BookDetail from "./frontend/pages/BookDetail.tsx";
 import Cart from "./frontend/pages/Cart.tsx";
 import MyOrders from "./frontend/pages/MyOrders.tsx";
@@ -18,7 +19,6 @@ import SearchResults from "./frontend/pages/SearchResults.tsx";
 import NotFound from "./frontend/pages/NotFound.tsx";
 
 const AdminDashboard = React.lazy(() => import("./frontend/pages/AdminDashboard.tsx"));
-const SuperAdminDashboard = React.lazy(() => import("./frontend/pages/SuperAdminDashboard.tsx"));
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -58,6 +58,7 @@ const Navbar = () => {
               <input
                 type="text"
                 placeholder="Tìm sách..."
+                maxLength={100}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -69,11 +70,8 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-8">
             {user ? (
               <>
-                {(user.role === "admin" || user.role === "super_admin") && (
+                {user.role === "admin" && (
                   <Link to="/admin" className="text-indigo-600 font-bold hover:text-indigo-700">Admin</Link>
-                )}
-                {user.role === "super_admin" && (
-                  <Link to="/superadmin" className="text-purple-600 font-bold hover:text-purple-700">Super Admin</Link>
                 )}
                 <Link to="/cart" className="text-gray-700 hover:text-indigo-600 relative">
                   <ShoppingCart className="h-6 w-6" />
@@ -86,11 +84,8 @@ const Navbar = () => {
                   <div className="absolute right-0 w-48 mt-2 py-2 bg-white border rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                     <Link to="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Thông tin cá nhân</Link>
                     <Link to="/orders" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50">Đơn hàng của tôi</Link>
-                    {(user.role === "admin" || user.role === "super_admin") && (
+                    {user.role === "admin" && (
                       <Link to="/admin" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 font-semibold text-indigo-600">Quản trị</Link>
-                    )}
-                    {user.role === "super_admin" && (
-                      <Link to="/superadmin" className="block px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 font-semibold text-purple-600">Siêu quản trị</Link>
                     )}
                     <button onClick={handleLogout} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center">
                       <LogOut className="h-4 w-4 mr-2" /> Đăng xuất
@@ -123,6 +118,7 @@ const Navbar = () => {
             <input
               type="text"
               placeholder="Tìm sách..."
+              maxLength={100}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-sm border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -133,11 +129,8 @@ const Navbar = () => {
               <Link to="/profile" className="block text-gray-700 font-medium">Thông tin cá nhân</Link>
               <Link to="/cart" className="block text-gray-700 font-medium">Giỏ hàng</Link>
               <Link to="/orders" className="block text-gray-700 font-medium">Đơn hàng của tôi</Link>
-              {(user.role === "admin" || user.role === "super_admin") && (
+              {user.role === "admin" && (
                 <Link to="/admin" className="block text-indigo-600 font-bold">Quản trị</Link>
-              )}
-              {user.role === "super_admin" && (
-                <Link to="/superadmin" className="block text-purple-600 font-bold">Siêu quản trị</Link>
               )}
               <button onClick={handleLogout} className="block text-red-600 font-medium">Đăng xuất</button>
             </>
@@ -165,6 +158,7 @@ export default function App() {
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/verify-email" element={<VerifyEmail />} />
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/category/:categoryName" element={<CategoryBooks />} />
@@ -175,7 +169,6 @@ export default function App() {
               <Route path="/orders/:id" element={<OrderDetail />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/admin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Đang tải...</div>}><AdminDashboard /></React.Suspense>} />
-              <Route path="/superadmin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Đang tải...</div>}><SuperAdminDashboard /></React.Suspense>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

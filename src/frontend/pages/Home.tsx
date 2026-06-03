@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { bookService, cartService } from "../services/api.ts";
-import { Search, ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ShoppingCart, Star } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext.tsx";
@@ -84,7 +84,7 @@ const Home = () => {
     query.set("limit", isSearching ? "24" : "5");
     if (search.trim()) query.set("search", search.trim());
     if (selectedCategory) query.set("category", selectedCategory);
-    if (!isSearching) query.set("sort", "bestseller");
+    query.set("sort", "bestseller");
 
     const params = `?${query.toString()}`;
     bookService.getAll(params)
@@ -189,10 +189,10 @@ const Home = () => {
 
       <div className="flex items-end justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 uppercase">TOP SÁCH BÁN CHẠY</h2>
+          <h2 className="text-2xl font-bold text-gray-900 uppercase">Sách bán chạy</h2>
           {selectedCategory ? <p className="text-sm text-gray-500">Danh mục: {selectedCategory}</p> : null}
         </div>
-        <div className="hidden md:block text-sm text-orange-600 font-semibold">{books.length} sản phẩm</div>
+        <div className="hidden text-sm font-semibold text-orange-600 md:block">{books.length} sản phẩm</div>
       </div>
 
       {/* Book Grid */}
@@ -234,6 +234,11 @@ const Home = () => {
                       {book.title}
                     </h3>
                     <p className="text-sm text-gray-500">{book.author}</p>
+                    <p className="flex items-center gap-1 text-xs text-gray-500">
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      <span className="font-semibold text-gray-700">{Number(book.average_rating || 0).toFixed(1)}</span>
+                      <span>({book.review_count || 0})</span>
+                    </p>
                     <p className="font-bold text-indigo-700">
                       {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(book.price)}
                     </p>

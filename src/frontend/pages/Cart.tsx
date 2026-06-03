@@ -14,6 +14,7 @@ import {
 import { cartService, orderService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { useToast } from "../context/ToastContext.tsx";
+import { isValidVietnamPhone } from "../utils/validation.ts";
 
 const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=BookHaven";
 
@@ -154,7 +155,7 @@ const Cart = () => {
     if (!normalizedProvince || !normalizedDistrict || !normalizedWard) errors.address = "Vui lòng chọn đầy đủ Tỉnh/Thành, Quận/Huyện và Phường/Xã.";
     if (normalizedAddress.length < 5 || normalizedAddress.length > 255) errors.streetAddress = "Địa chỉ giao hàng phải từ 5 đến 255 ký tự.";
     if (!normalizedPhone) errors.phone = "Vui lòng nhập số điện thoại.";
-    else if (!/^(0|\+84)[0-9]{8,10}$/.test(normalizedPhone)) errors.phone = "Số điện thoại Việt Nam không hợp lệ.";
+    else if (!isValidVietnamPhone(normalizedPhone)) errors.phone = "Số điện thoại Việt Nam không hợp lệ.";
 
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
@@ -315,6 +316,7 @@ const Cart = () => {
                   <input
                     className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none ${fieldErrors.streetAddress ? "border-red-300" : "border-gray-200"}`}
                     placeholder="Số nhà, tên đường..."
+                    maxLength={255}
                     value={streetAddress}
                     onChange={(e) => setStreetAddress(e.target.value)}
                   />
@@ -365,18 +367,21 @@ const Cart = () => {
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                         placeholder="Tỉnh/Thành"
+                        maxLength={100}
                         value={province}
                         onChange={(e) => setProvince(e.target.value)}
                       />
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
                         placeholder="Quận/Huyện"
+                        maxLength={100}
                         value={district}
                         onChange={(e) => setDistrict(e.target.value)}
                       />
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none sm:col-span-2"
                         placeholder="Phường/Xã"
+                        maxLength={100}
                         value={ward}
                         onChange={(e) => setWard(e.target.value)}
                       />
@@ -391,6 +396,7 @@ const Cart = () => {
                     </label>
                     <input
                       type="tel"
+                      maxLength={10}
                       className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none ${fieldErrors.phone ? "border-red-300" : "border-gray-200"}`}
                       placeholder="Nhập số điện thoại liên hệ..."
                       value={phone}
@@ -438,6 +444,7 @@ const Cart = () => {
                       <p key={line}>{line}</p>
                     ))}
                   </div>
+                  {fieldErrors.paymentMethod && <p className="text-xs font-medium text-red-600">{fieldErrors.paymentMethod}</p>}
                 </div>
               </div>
             </div>

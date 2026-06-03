@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { bookService, orderService } from "../services/api.ts";
+import { bookService, orderService, userService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { useToast } from "../context/ToastContext.tsx";
-import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw, Shield, UserPlus } from "lucide-react";
 import { useNavigate, Routes, Route, Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
@@ -161,8 +161,9 @@ const AdminBooks = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [inputPage, setInputPage] = useState("1");
   const [formData, setFormData] = useState({
-    title: "", author: "", description: "", price: "", category_id: 1, stock: "", image_url: ""
+    title: "", author: "", description: "", price: "", category_id: 0, stock: "", image_url: ""
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const fetchBooks = () => {
     setLoading(true);
@@ -217,11 +218,43 @@ const AdminBooks = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors: Record<string, string> = {};
+    const title = formData.title.trim();
+    const author = formData.author.trim();
+    const description = formData.description.trim();
+    const price = Number(formData.price);
+    const stock = Number(formData.stock);
+
+    if (!title || title.length > 200) errors.title = "Tiêu đề phải từ 1 đến 200 ký tự.";
+    if (!author || author.length > 150) errors.author = "Tác giả phải từ 1 đến 150 ký tự.";
+    if (description.length > 5000) errors.description = "Mô tả sách tối đa 5000 ký tự.";
+    if (formData.price.trim() === "" || !Number.isFinite(price) || price <= 0) errors.price = "Giá sách phải lớn hơn 0.";
+    if (formData.stock.trim() === "" || !Number.isInteger(stock) || stock < 0) errors.stock = "Tồn kho phải là số nguyên không âm.";
+    if (!Number.isInteger(formData.category_id) || formData.category_id <= 0) errors.category_id = "Vui lòng chọn danh mục.";
+    if (formData.image_url.trim()) {
+      try {
+        const imageUrl = new URL(formData.image_url.trim());
+        if (!["http:", "https:"].includes(imageUrl.protocol)) errors.image_url = "URL ảnh phải sử dụng HTTP hoặc HTTPS.";
+      } catch {
+        errors.image_url = "URL ảnh không hợp lệ.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      showToast("Vui lòng kiểm tra lại thông tin sách.", "error");
+      return;
+    }
+
+    setFieldErrors({});
     try {
       const payload = {
         ...formData,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
+        title,
+        author,
+        description,
+        price,
+        stock,
       };
 
       if (editingBook) {
@@ -232,6 +265,7 @@ const AdminBooks = () => {
       setIsModalOpen(false);
       fetchBooks();
     } catch (err: any) {
+      if (err?.errors && typeof err.errors === "object") setFieldErrors(err.errors);
       showToast(err.message || "Không thể lưu thông tin sách.", "error");
     }
   };
@@ -259,8 +293,9 @@ const AdminBooks = () => {
       });
     } else {
       setEditingBook(null);
-      setFormData({ title: "", author: "", description: "", price: "", category_id: 1, stock: "", image_url: "" });
+      setFormData({ title: "", author: "", description: "", price: "", category_id: categories[0]?.id ?? 0, stock: "", image_url: "" });
     }
+    setFieldErrors({});
     setIsModalOpen(true);
   };
 
@@ -277,6 +312,7 @@ const AdminBooks = () => {
         <input
           type="text"
           value={searchKeyword}
+          maxLength={100}
           onChange={(e) => setSearchKeyword(e.target.value)}
           placeholder="Tìm theo tên sách hoặc tác giả..."
           className="w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -375,28 +411,33 @@ const AdminBooks = () => {
             <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold">Tiêu đề</label>
-                <input required className="w-full p-2 border rounded-lg" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                <input required maxLength={200} className="w-full p-2 border rounded-lg" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+                {fieldErrors.title && <p className="text-xs font-medium text-red-600">{fieldErrors.title}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Tác giả</label>
-                <input required className="w-full p-2 border rounded-lg" value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} />
+                <input required maxLength={150} className="w-full p-2 border rounded-lg" value={formData.author} onChange={e => setFormData({...formData, author: e.target.value})} />
+                {fieldErrors.author && <p className="text-xs font-medium text-red-600">{fieldErrors.author}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Thể loại</label>
                 <select className="w-full p-2 border rounded-lg" value={formData.category_id} onChange={e => setFormData({...formData, category_id: Number(e.target.value)})}>
                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+                {fieldErrors.category_id && <p className="text-xs font-medium text-red-600">{fieldErrors.category_id}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Giá (VND)</label>
                 <input
                   type="number"
                   required
-                  min="0"
+                  min="1"
+                  step="1"
                   className="w-full p-2 border rounded-lg"
                   value={formData.price}
                   onChange={e => setFormData({...formData, price: e.target.value})}
                 />
+                {fieldErrors.price && <p className="text-xs font-medium text-red-600">{fieldErrors.price}</p>}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold">Số lượng trong kho</label>
@@ -404,18 +445,22 @@ const AdminBooks = () => {
                   type="number"
                   required
                   min="0"
+                  step="1"
                   className="w-full p-2 border rounded-lg"
                   value={formData.stock}
                   onChange={e => setFormData({...formData, stock: e.target.value})}
                 />
+                {fieldErrors.stock && <p className="text-xs font-medium text-red-600">{fieldErrors.stock}</p>}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold">URL Hình ảnh</label>
-                <input className="w-full p-2 border rounded-lg" value={formData.image_url} onChange={e => setFormData({...formData, image_url: e.target.value})} />
+                <input maxLength={2048} className="w-full p-2 border rounded-lg" value={formData.image_url} onChange={e => setFormData({...formData, image_url: e.target.value})} />
+                {fieldErrors.image_url && <p className="text-xs font-medium text-red-600">{fieldErrors.image_url}</p>}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold">Mô tả</label>
-                <textarea className="w-full p-2 border rounded-lg h-32" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                <textarea maxLength={5000} className="w-full p-2 border rounded-lg h-32" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                {fieldErrors.description && <p className="text-xs font-medium text-red-600">{fieldErrors.description}</p>}
               </div>
               <div className="md:col-span-2 flex justify-end gap-4 mt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 border rounded-lg font-bold">Hủy</button>
@@ -685,6 +730,7 @@ const AdminCategories = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
 
   const fetchCategories = () => {
     setLoading(true);
@@ -699,16 +745,24 @@ const AdminCategories = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const normalizedName = name.trim();
+    if (normalizedName.length < 2 || normalizedName.length > 100) {
+      setNameError("Tên thể loại phải từ 2 đến 100 ký tự.");
+      return;
+    }
+
+    setNameError("");
     try {
       if (editingCategory) {
-        await bookService.updateCategory(editingCategory.id, { name });
+        await bookService.updateCategory(editingCategory.id, { name: normalizedName });
       } else {
-        await bookService.createCategory({ name });
+        await bookService.createCategory({ name: normalizedName });
       }
       setIsModalOpen(false);
       setName("");
       fetchCategories();
     } catch (err: any) {
+      setNameError(err.message || "Không thể lưu danh mục.");
       showToast(err.message || "Không thể lưu danh mục.", "error");
     }
   };
@@ -732,6 +786,7 @@ const AdminCategories = () => {
       setEditingCategory(null);
       setName("");
     }
+    setNameError("");
     setIsModalOpen(true);
   };
 
@@ -778,7 +833,8 @@ const AdminCategories = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-bold">Tên thể loại</label>
-                <input required className="w-full p-2 border rounded-lg" value={name} onChange={e => setName(e.target.value)} />
+                <input required maxLength={100} className="w-full p-2 border rounded-lg" value={name} onChange={e => setName(e.target.value)} />
+                {nameError && <p className="text-xs font-medium text-red-600">{nameError}</p>}
               </div>
               <div className="flex justify-end gap-4 mt-6">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2 border rounded-lg font-bold">Hủy</button>
@@ -792,17 +848,150 @@ const AdminCategories = () => {
   );
 };
 
+const AdminUsers = () => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [accountStatus, setAccountStatus] = useState<"active" | "inactive">("active");
+  const [showOnlyAdmins, setShowOnlyAdmins] = useState(false);
+  const { user: currentUser } = useAuth();
+  const { showToast } = useToast();
+
+  const fetchUsers = () => {
+    setLoading(true);
+    userService.getAll(accountStatus)
+      .then(setUsers)
+      .catch((err: any) => showToast(err.message || "Không thể tải danh sách người dùng.", "error"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [accountStatus]);
+
+  const filteredUsers = users.filter((user) => {
+    if (showOnlyAdmins && user.role !== "admin") return false;
+    const keyword = searchTerm.trim().toLowerCase();
+    return !keyword || user.full_name?.toLowerCase().includes(keyword) || user.email?.toLowerCase().includes(keyword);
+  });
+
+  const handleRoleUpdate = async (id: number, role: string) => {
+    try {
+      await userService.updateRole(id, role);
+      showToast("Đã cập nhật quyền người dùng.", "success");
+      fetchUsers();
+    } catch (err: any) {
+      showToast(err.message || "Không thể cập nhật quyền người dùng.", "error");
+    }
+  };
+
+  const handleDeactivate = async (id: number) => {
+    if (!window.confirm("Vô hiệu hóa tài khoản này? Lịch sử đơn hàng vẫn được giữ lại.")) return;
+    try {
+      await userService.delete(id);
+      showToast("Đã vô hiệu hóa tài khoản.", "success");
+      fetchUsers();
+    } catch (err: any) {
+      showToast(err.message || "Không thể vô hiệu hóa tài khoản.", "error");
+    }
+  };
+
+  const handleReactivate = async (id: number) => {
+    try {
+      await userService.reactivate(id);
+      showToast("Đã khôi phục tài khoản.", "success");
+      fetchUsers();
+    } catch (err: any) {
+      showToast(err.message || "Không thể khôi phục tài khoản.", "error");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold text-gray-900">Quản lý người dùng</h2>
+        <p className="mt-1 text-sm text-gray-500">Quản lý quyền và trạng thái tài khoản trong hệ thống.</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex items-center gap-4 rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="rounded-lg bg-amber-50 p-3 text-amber-600"><Users size={24} /></div>
+          <div><p className="text-sm text-gray-500">Tài khoản đang hiển thị</p><p className="text-2xl font-bold text-gray-900">{users.length}</p></div>
+        </div>
+        <div className="flex items-center gap-4 rounded-lg border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="rounded-lg bg-indigo-50 p-3 text-indigo-600"><Shield size={24} /></div>
+          <div><p className="text-sm text-gray-500">Quản trị viên</p><p className="text-2xl font-bold text-gray-900">{users.filter((user) => user.role === "admin").length}</p></div>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-gray-200 bg-gray-50 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <input type="search" maxLength={100} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="Tìm theo tên hoặc email..." className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 lg:max-w-xs" />
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex rounded-lg border border-gray-200 bg-white p-1">
+              <button type="button" onClick={() => setAccountStatus("active")} className={`rounded-md px-3 py-1.5 text-sm font-semibold ${accountStatus === "active" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>Đang hoạt động</button>
+              <button type="button" onClick={() => setAccountStatus("inactive")} className={`rounded-md px-3 py-1.5 text-sm font-semibold ${accountStatus === "inactive" ? "bg-indigo-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}>Đã vô hiệu hóa</button>
+            </div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+              <input type="checkbox" checked={showOnlyAdmins} onChange={(e) => setShowOnlyAdmins(e.target.checked)} className="h-4 w-4 rounded text-indigo-600" />
+              Chỉ hiện Admin
+            </label>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-5 py-3 text-xs font-semibold uppercase text-gray-500">Người dùng</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase text-gray-500">Email</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase text-gray-500">Vai trò</th>
+                <th className="px-5 py-3 text-xs font-semibold uppercase text-gray-500">Ngày tham gia</th>
+                <th className="px-5 py-3 text-right text-xs font-semibold uppercase text-gray-500">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredUsers.map((user) => (
+                <tr key={user.id} className="hover:bg-gray-50">
+                  <td className="px-5 py-4 font-semibold text-gray-900">{user.full_name || "Chưa cập nhật"}</td>
+                  <td className="px-5 py-4 text-sm text-gray-600">{user.email}</td>
+                  <td className="px-5 py-4">
+                    <select value={user.role} onChange={(e) => handleRoleUpdate(user.id, e.target.value)} disabled={user.id === currentUser?.id || accountStatus === "inactive"} className={`rounded-full border-0 px-3 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500 ${user.role === "admin" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-700"}`}>
+                      <option value="user">User</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </td>
+                  <td className="px-5 py-4 text-sm text-gray-500">{new Date(user.created_at).toLocaleDateString("vi-VN")}</td>
+                  <td className="px-5 py-4 text-right">
+                    {accountStatus === "active" ? (
+                      <button type="button" onClick={() => handleDeactivate(user.id)} disabled={user.id === currentUser?.id} className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-20" aria-label="Vô hiệu hóa tài khoản" title="Vô hiệu hóa tài khoản"><Trash2 size={18} /></button>
+                    ) : (
+                      <button type="button" onClick={() => handleReactivate(user.id)} className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50" aria-label="Khôi phục tài khoản" title="Khôi phục tài khoản"><UserPlus size={18} /></button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {!loading && filteredUsers.length === 0 && <p className="p-8 text-center text-sm text-gray-500">Không tìm thấy tài khoản phù hợp.</p>}
+        {loading && <p className="p-8 text-center text-sm text-gray-500">Đang tải danh sách người dùng...</p>}
+      </div>
+    </div>
+  );
+};
+
 const AdminDashboard = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (!loading && (!user || (user.role !== "admin" && user.role !== "super_admin"))) {
+    if (!loading && (!user || user.role !== "admin")) {
       navigate("/");
     }
   }, [loading, user, navigate]);
 
-  if (loading || !user || (user.role !== "admin" && user.role !== "super_admin")) {
+  if (loading || !user || user.role !== "admin") {
     return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div></div>;
   }
 
@@ -818,12 +1007,16 @@ const AdminDashboard = () => {
         <Link to="/admin/orders" className="flex items-center space-x-3 p-3 rounded-xl hover:bg-indigo-50 text-gray-700 font-medium">
           <Package size={20} /> <span>Quản lý đơn hàng</span>
         </Link>
+        <Link to="/admin/users" className="flex items-center space-x-3 p-3 rounded-xl hover:bg-indigo-50 text-gray-700 font-medium">
+          <Users size={20} /> <span>Quản lý người dùng</span>
+        </Link>
       </aside>
       <div className="flex-grow">
         <Routes>
           <Route path="/" element={<AdminOverview />} />
           <Route path="/books" element={<AdminBooks />} />
           <Route path="/orders" element={<AdminOrders />} />
+          <Route path="/users" element={<AdminUsers />} />
         </Routes>
       </div>
     </div>

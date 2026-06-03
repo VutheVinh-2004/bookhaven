@@ -17,12 +17,14 @@ export const getCart = (req: AuthRequest, res: Response) => {
 
 export const addToCart = (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
-  const bookId = Number(req.body.book_id);
-  const quantity = Number(req.body.quantity ?? 1);
+  const rawBookId = req.body.book_id;
+  const rawQuantity = req.body.quantity ?? 1;
+  const bookId = Number(rawBookId);
+  const quantity = Number(rawQuantity);
   const errors: ValidationErrors = {};
 
-  if (!isPositiveInt(bookId)) errors.book_id = "ID sách không hợp lệ.";
-  if (!isPositiveInt(quantity)) errors.quantity = "Số lượng phải là số nguyên lớn hơn 0.";
+  if (!isPositiveInt(rawBookId)) errors.book_id = "ID sách không hợp lệ.";
+  if (!isPositiveInt(rawQuantity)) errors.quantity = "Số lượng phải là số nguyên lớn hơn 0.";
   if (hasErrors(errors)) return fail(res, 400, "Dữ liệu giỏ hàng không hợp lệ.", errors);
 
   try {
@@ -49,11 +51,12 @@ export const addToCart = (req: AuthRequest, res: Response) => {
 
 export const updateCartItem = (req: AuthRequest, res: Response) => {
   const id = Number(req.params.id);
-  const quantity = Number(req.body.quantity);
+  const rawQuantity = req.body.quantity;
+  const quantity = Number(rawQuantity);
   const userId = req.user?.id;
 
   if (!isPositiveInt(id)) return fail(res, 400, "ID giỏ hàng không hợp lệ.");
-  if (!isPositiveInt(quantity)) return fail(res, 400, "Số lượng phải là số nguyên lớn hơn 0.");
+  if (!isPositiveInt(rawQuantity)) return fail(res, 400, "Số lượng phải là số nguyên lớn hơn 0.");
 
   try {
     const cartItem = db.prepare("SELECT book_id FROM cart_items WHERE id = ? AND user_id = ?").get(id, userId) as any;

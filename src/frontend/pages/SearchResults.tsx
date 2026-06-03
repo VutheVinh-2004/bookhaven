@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { bookService, cartService } from "../services/api.ts";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext.tsx";
+import BookSortSelect, { BookSort } from "../components/BookSortSelect.tsx";
 
 const SearchResults = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -16,6 +17,7 @@ const SearchResults = () => {
 
   const keyword = (searchParams.get("search") || "").trim();
   const currentPage = Math.max(Number(searchParams.get("page") || 1), 1);
+  const sort = (searchParams.get("sort") || "bestseller") as BookSort;
   const PAGE_SIZE = 24;
 
   useEffect(() => {
@@ -24,6 +26,7 @@ const SearchResults = () => {
     query.set("page", String(currentPage));
     query.set("limit", String(PAGE_SIZE));
     if (keyword) query.set("search", keyword);
+    query.set("sort", sort);
 
     bookService
       .getAll(`?${query.toString()}`)
@@ -36,7 +39,7 @@ const SearchResults = () => {
         setTotalPages(1);
       })
       .finally(() => setLoading(false));
-  }, [keyword, currentPage]);
+  }, [keyword, currentPage, sort]);
 
   useEffect(() => {
     setPageInput(String(currentPage));
@@ -63,11 +66,22 @@ const SearchResults = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Kết quả tìm kiếm</h1>
-        <p className="text-gray-600 mt-1">
-          {keyword ? <>Từ khóa: <span className="font-semibold">"{keyword}"</span></> : "Vui lòng nhập từ khóa để tìm sách."}
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Kết quả tìm kiếm</h1>
+          <p className="text-gray-600 mt-1">
+            {keyword ? <>Từ khóa: <span className="font-semibold">"{keyword}"</span></> : "Vui lòng nhập từ khóa để tìm sách."}
+          </p>
+        </div>
+        <BookSortSelect
+          value={sort}
+          onChange={(value) => setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("sort", value);
+            next.delete("page");
+            return next;
+          })}
+        />
       </div>
 
       {loading ? (
@@ -88,6 +102,11 @@ const SearchResults = () => {
                   <div className="space-y-1">
                     <h3 className="font-bold text-gray-900 line-clamp-2 group-hover:text-indigo-600 transition-colors">{book.title}</h3>
                     <p className="text-sm text-gray-500">{book.author}</p>
+                    <p className="flex items-center gap-1 text-xs text-gray-500">
+                      <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                      <span className="font-semibold text-gray-700">{Number(book.average_rating || 0).toFixed(1)}</span>
+                      <span>({book.review_count || 0})</span>
+                    </p>
                     <p className="font-bold text-indigo-700">{new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(book.price)}</p>
                   </div>
                 </Link>
