@@ -25,7 +25,7 @@ export const fetchApi = async (endpoint: string, options: RequestInit = {}) => {
 
   const payload = await response.json().catch(() => ({}));
 
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     localStorage.removeItem("token");
   }
 
@@ -72,13 +72,15 @@ export const orderService = {
   getMyOrders: () => fetchApi("/orders/my"),
   getDetails: (id: string) => fetchApi(`/orders/${id}`),
   payTest: (id: string | number) => fetchApi(`/orders/${id}/pay-test`, { method: "POST" }),
+  cancel: (id: string | number) => fetchApi(`/orders/${id}/cancel`, { method: "PUT" }),
   getAllAdmin: () => fetchApi("/admin/orders"),
   getStats: (period: "7d" | "30d" | "12m" = "7d") => fetchApi(`/admin/stats?period=${period}`),
   updateStatus: (id: number, status: string) => fetchApi(`/admin/orders/${id}/status`, { method: "PUT", body: JSON.stringify({ status }) }),
 };
 
 export const userService = {
-  getAll: () => fetchApi("/superadmin/users"),
+  getAll: (status: "all" | "active" | "inactive" = "all") => fetchApi(`/superadmin/users?status=${status}`),
   updateRole: (id: number, role: string) => fetchApi(`/superadmin/users/${id}/role`, { method: "PUT", body: JSON.stringify({ role }) }),
+  reactivate: (id: number) => fetchApi(`/superadmin/users/${id}/reactivate`, { method: "PUT" }),
   delete: (id: number) => fetchApi(`/superadmin/users/${id}`, { method: "DELETE" }),
 };

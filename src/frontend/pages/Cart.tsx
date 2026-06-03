@@ -6,7 +6,6 @@ import {
   CreditCard,
   MapPin,
   Phone,
-  QrCode,
   ShieldCheck,
   ShoppingBag,
   Trash2,
@@ -20,7 +19,7 @@ const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=Boo
 type Ward = { code: number; name: string };
 type District = { code: number; name: string; wards?: Ward[] };
 type Province = { code: number; name: string; districts?: District[] };
-type PaymentMethod = "qr_code" | "cod" | "card";
+type PaymentMethod = "cod" | "card";
 
 const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value);
 
@@ -30,12 +29,6 @@ const paymentOptions: Array<{
   description: string;
   icon: React.ElementType;
 }> = [
-  {
-    value: "qr_code",
-    label: "Thanh toán bằng QR",
-    description: "Quét QR của bạn để chuyển khoản nhanh.",
-    icon: QrCode
-  },
   {
     value: "cod",
     label: "Thanh toán khi nhận hàng",
@@ -51,7 +44,6 @@ const paymentOptions: Array<{
 ];
 
 const paymentGuide: Record<PaymentMethod, string[]> = {
-  qr_code: ["Sau khi đặt hàng, bạn sẽ được chuyển sang trang QR thanh toán."],
   cod: ["Bạn thanh toán trực tiếp cho nhân viên giao hàng khi nhận sách."],
   card: ["Bạn sẽ nhập thông tin thẻ ở cổng thanh toán bảo mật.", "Giao dịch cần xác thực OTP trước khi hoàn tất."]
 };
@@ -404,7 +396,7 @@ const Cart = () => {
 
                 <div className="space-y-3">
                   <label className="text-sm font-bold text-gray-700 flex items-center">
-                    <QrCode className="h-4 w-4 mr-1 text-indigo-600" /> Phương thức thanh toán
+                    <CreditCard className="h-4 w-4 mr-1 text-indigo-600" /> Phương thức thanh toán
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
                     {paymentOptions.map((option) => {
@@ -433,11 +425,6 @@ const Cart = () => {
                     {paymentGuide[paymentMethod].map((line) => (
                       <p key={line}>{line}</p>
                     ))}
-                    {paymentMethod === "qr_code" && (
-                      <div className="mt-3 mx-auto h-28 w-28 rounded-xl border border-gray-200 bg-white grid place-items-center">
-                        <QrCode className="h-16 w-16 text-gray-700" />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

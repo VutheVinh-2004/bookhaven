@@ -83,7 +83,7 @@ export const createOrder = (req: AuthRequest, res: Response) => {
   const shippingAddress = trimText(req.body.shipping_address);
   const phone = trimText(req.body.phone);
   const paymentMethod = trimText(req.body.payment_method) || "cod";
-  const allowedPaymentMethods = ["cod", "qr_code", "card", "bank_transfer", "momo"];
+  const allowedPaymentMethods = ["cod", "card"];
   const errors: ValidationErrors = {};
 
   if (!isNonEmptyString(shippingAddress, 5, 255)) errors.shipping_address = "Địa chỉ giao hàng phải từ 5 đến 255 ký tự.";
@@ -138,12 +138,12 @@ export const payOrderTest = (req: AuthRequest, res: Response) => {
   try {
     const order = db.prepare("SELECT id, user_id, payment_method, payment_status, status FROM orders WHERE id = ?").get(req.params.id) as any;
     if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
-    if (req.user?.role === "user" && order.user_id !== req.user.id) return fail(res, 403, "Bạn không có quyền thanh toán đơn hàng này.");
+    if (order.user_id !== req.user?.id) return fail(res, 403, "Bạn không có quyền thanh toán đơn hàng này.");
     if (order.status === "cancelled") return fail(res, 400, "Đơn hàng đã hủy, không thể thanh toán.");
-    if (order.payment_method === "cod") return fail(res, 400, "Đơn hàng COD không cần thanh toán online.");
+    if (order.payment_method !== "card") return fail(res, 400, "Phương thức thanh toán của đơn hàng không hỗ trợ thanh toán online.");
     if (order.payment_status === "paid") return ok(res, null, "Đơn hàng đã được thanh toán trước đó.");
 
-    db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ?").run(order.id);
+    db.prepare("UPDATE orders SET payment_status = 'paid', paid_at = CURRENT_TIMESTAMP WHERE id = ?").run(order.id);
     return ok(res, null, "Thanh toán thành công.");
   } catch (error) {
     console.error("Pay order test error:", error);
@@ -170,6 +170,44 @@ export const getOrderDetails = (req: AuthRequest, res: Response) => {
   return ok(res, { ...order, items });
 };
 
+export const cancelMyOrder = (req: AuthRequest, res: Response) => {
+  if (!isPositiveInt(req.params.id)) return fail(res, 400, "ID đơn hàng không hợp lệ.");
+
+  const order = db.prepare(
+    "SELECT id, user_id, status, payment_status FROM orders WHERE id = ?"
+  ).get(req.params.id) as { id: number; user_id: number; status: string; payment_status: string } | undefined;
+
+  if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
+  if (order.user_id !== req.user?.id) return fail(res, 403, "Bạn không có quyền hủy đơn hàng này.");
+  if (!["pending", "processing"].includes(order.status)) {
+    return fail(res, 400, "Đơn hàng đã chuyển sang giai đoạn giao hàng hoặc đã kết thúc, không thể hủy.");
+  }
+  if (order.payment_status === "paid") {
+    return fail(res, 400, "Đơn hàng đã thanh toán, vui lòng liên hệ hỗ trợ để xử lý hoàn tiền.");
+  }
+
+  try {
+    const transaction = db.transaction(() => {
+      const orderItems = db.prepare(
+        "SELECT book_id, quantity FROM order_items WHERE order_id = ?"
+      ).all(order.id) as Array<{ book_id: number; quantity: number }>;
+      const restoreStock = db.prepare("UPDATE books SET stock = stock + ? WHERE id = ?");
+
+      for (const item of orderItems) {
+        restoreStock.run(item.quantity, item.book_id);
+      }
+
+      db.prepare("UPDATE orders SET status = 'cancelled', payment_status = 'cancelled' WHERE id = ?").run(order.id);
+    });
+
+    transaction();
+    return ok(res, null, "Hủy đơn hàng thành công.");
+  } catch (error) {
+    console.error("Cancel order error:", error);
+    return fail(res, 500, "Lỗi hủy đơn hàng.");
+  }
+};
+
 export const getAllOrders = (_req: AuthRequest, res: Response) => {
   return ok(res, db.prepare(`
     SELECT o.*, u.email as user_email, u.full_name as user_name
@@ -185,7 +223,7 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
   const allowed = ["pending", "processing", "shipped", "delivered", "cancelled"];
   if (!allowed.includes(status)) return fail(res, 400, "Trạng thái đơn hàng không hợp lệ.");
 
-  const order = db.prepare("SELECT id, status FROM orders WHERE id = ?").get(req.params.id) as { id: number; status: string } | undefined;
+  const order = db.prepare("SELECT id, status, payment_method, payment_status FROM orders WHERE id = ?").get(req.params.id) as { id: number; status: string; payment_method: string; payment_status: string } | undefined;
   if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
 
   if (order.status === status) {
@@ -194,6 +232,25 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
 
   if (order.status === "cancelled") {
     return fail(res, 400, "Đơn hàng đã hủy, không thể cập nhật lại trạng thái.");
+  }
+
+  const validTransitions: Record<string, string[]> = {
+    pending: ["processing", "cancelled"],
+    processing: ["shipped", "cancelled"],
+    shipped: ["delivered"],
+    delivered: []
+  };
+
+  if (!validTransitions[order.status]?.includes(status)) {
+    return fail(res, 400, `Không thể chuyển trạng thái đơn hàng từ "${order.status}" sang "${status}".`);
+  }
+
+  if (status === "cancelled" && order.payment_status === "paid") {
+    return fail(res, 400, "Đơn hàng đã thanh toán, cần xử lý hoàn tiền trước khi hủy.");
+  }
+
+  if ((status === "shipped" || status === "delivered") && order.payment_method !== "cod" && order.payment_status !== "paid") {
+    return fail(res, 400, "Đơn hàng chưa thanh toán, không thể chuyển sang trạng thái giao hàng.");
   }
 
   try {
@@ -206,9 +263,9 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
         }
       }
 
-      db.prepare("UPDATE orders SET status = ? WHERE id = ?").run(status, req.params.id);
+      db.prepare("UPDATE orders SET status = ?, payment_status = CASE WHEN ? = 'cancelled' THEN 'cancelled' ELSE payment_status END WHERE id = ?").run(status, status, req.params.id);
       if (status === "delivered") {
-        db.prepare("UPDATE orders SET payment_status = 'paid' WHERE id = ? AND payment_method = 'cod'").run(req.params.id);
+        db.prepare("UPDATE orders SET payment_status = 'paid', paid_at = CURRENT_TIMESTAMP WHERE id = ? AND payment_method = 'cod'").run(req.params.id);
       }
     });
 
@@ -225,26 +282,26 @@ export const getAdminStats = (req: AuthRequest, res: Response) => {
   const allowedPeriods = ["7d", "30d", "12m"];
   const selectedPeriod = allowedPeriods.includes(period) ? period : "7d";
 
-  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_price), 0) as total FROM orders WHERE status = 'delivered'").get() as any;
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_price), 0) as total FROM orders WHERE payment_status = 'paid'").get() as any;
   const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'processing')").get() as any;
-  const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'user'").get() as any;
+  const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'user' AND is_active = 1").get() as any;
   const totalBooks = db.prepare("SELECT COUNT(*) as count FROM books").get() as any;
   const totalCategories = db.prepare("SELECT COUNT(*) as count FROM categories").get() as any;
 
   const revenueByPeriod = selectedPeriod === "12m"
     ? db.prepare(`
-      SELECT strftime('%Y-%m', created_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      SELECT strftime('%Y-%m', paid_at) as label, COALESCE(SUM(total_price), 0) as revenue
       FROM orders
-      WHERE status = 'delivered' AND date(created_at) >= date('now', '-11 months', 'start of month')
-      GROUP BY strftime('%Y-%m', created_at)
+      WHERE payment_status = 'paid' AND paid_at IS NOT NULL AND date(paid_at) >= date('now', '-11 months', 'start of month')
+      GROUP BY strftime('%Y-%m', paid_at)
       ORDER BY label
     `).all()
     : db.prepare(`
-      SELECT date(created_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      SELECT date(paid_at) as label, COALESCE(SUM(total_price), 0) as revenue
       FROM orders
-      WHERE status = 'delivered'
-        AND date(created_at) >= date('now', ?)
-      GROUP BY date(created_at)
+      WHERE payment_status = 'paid' AND paid_at IS NOT NULL
+        AND date(paid_at) >= date('now', ?)
+      GROUP BY date(paid_at)
       ORDER BY label
     `).all(selectedPeriod === "30d" ? "-29 days" : "-6 days");
 
@@ -278,7 +335,7 @@ export const getAdminStats = (req: AuthRequest, res: Response) => {
     FROM order_items oi
     JOIN orders o ON o.id = oi.order_id
     JOIN books b ON b.id = oi.book_id
-    WHERE o.status = 'delivered'
+    WHERE o.payment_status = 'paid'
     GROUP BY b.id, b.title, b.author
     ORDER BY sold_quantity DESC, revenue DESC
     LIMIT 5

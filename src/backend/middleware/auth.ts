@@ -40,7 +40,7 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     }
 
     const user = db.prepare(
-      "SELECT id, email, role FROM users WHERE id = ? AND email = ? AND email_verified = 1"
+      "SELECT id, email, role FROM users WHERE id = ? AND email = ? AND email_verified = 1 AND is_active = 1"
     ).get(Number(decoded.id), decoded.email) as AuthUser | undefined;
 
     if (!user) {

@@ -10,12 +10,13 @@ const SuperAdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showOnlyAdmins, setShowOnlyAdmins] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [accountStatus, setAccountStatus] = useState<"active" | "inactive">("active");
   const { user: currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   const fetchUsers = () => {
     setLoading(true);
-    userService.getAll()
+    userService.getAll(accountStatus)
       .then(data => {
         setAllUsers(data);
       })
@@ -29,7 +30,7 @@ const SuperAdminDashboard = () => {
       return;
     }
     fetchUsers();
-  }, [authLoading, currentUser, navigate]);
+  }, [authLoading, currentUser, navigate, accountStatus]);
 
   useEffect(() => {
     let filtered = allUsers;
@@ -59,11 +60,22 @@ const SuperAdminDashboard = () => {
   };
 
   const handleDeleteUser = async (id: number) => {
+    if (!window.confirm("Vô hiệu hóa tài khoản này? Lịch sử đơn hàng vẫn được giữ lại.")) return;
+
     try {
       await userService.delete(id);
       fetchUsers();
     } catch (err: any) {
-      console.error("Lỗi xóa người dùng:", err.message);
+      console.error("Lỗi vô hiệu hóa người dùng:", err.message);
+    }
+  };
+
+  const handleReactivateUser = async (id: number) => {
+    try {
+      await userService.reactivate(id);
+      fetchUsers();
+    } catch (err: any) {
+      console.error("Lỗi khôi phục người dùng:", err.message);
     }
   };
 
@@ -115,6 +127,22 @@ const SuperAdminDashboard = () => {
               />
               <Users className="absolute left-3 top-2.5 text-gray-400 h-5 w-5" />
             </div>
+            <div className="flex items-center rounded-lg border border-gray-200 bg-white p-1">
+              <button
+                type="button"
+                onClick={() => setAccountStatus("active")}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${accountStatus === "active" ? "bg-purple-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                Đang hoạt động
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountStatus("inactive")}
+                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${accountStatus === "inactive" ? "bg-purple-600 text-white" : "text-gray-600 hover:bg-gray-50"}`}
+              >
+                Đã vô hiệu hóa
+              </button>
+            </div>
             <label className="flex items-center cursor-pointer gap-2 whitespace-nowrap">
               <input
                 type="checkbox"
@@ -152,7 +180,7 @@ const SuperAdminDashboard = () => {
                     }`}
                     value={u.role}
                     onChange={(e) => handleRoleUpdate(u.id, e.target.value)}
-                    disabled={u.id === currentUser?.id}
+                    disabled={u.id === currentUser?.id || accountStatus === "inactive"}
                   >
                     <option value="user">User</option>
                     <option value="admin">Admin</option>
@@ -163,13 +191,26 @@ const SuperAdminDashboard = () => {
                   {new Date(u.created_at).toLocaleDateString('vi-VN')}
                 </td>
                 <td className="px-6 py-4 text-right">
-                  <button
-                    onClick={() => handleDeleteUser(u.id)}
-                    disabled={u.id === currentUser?.id}
-                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-20"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  {accountStatus === "active" ? (
+                    <button
+                      onClick={() => handleDeleteUser(u.id)}
+                      disabled={u.id === currentUser?.id}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg disabled:opacity-20"
+                      aria-label="Vô hiệu hóa tài khoản"
+                      title="Vô hiệu hóa tài khoản"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleReactivateUser(u.id)}
+                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                      aria-label="Khôi phục tài khoản"
+                      title="Khôi phục tài khoản"
+                    >
+                      <UserPlus size={18} />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}

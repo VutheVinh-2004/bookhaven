@@ -8,7 +8,7 @@ const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=Boo
 const getPaymentMethodText = (method?: string) => {
   switch (method) {
     case "card": return "Thanh toán bằng thẻ";
-    case "qr_code": return "Thanh toán bằng QR";
+    case "qr_code": return "Phương thức không còn hỗ trợ";
     case "bank_transfer": return "Chuyển khoản ngân hàng";
     case "momo": return "Ví MoMo";
     case "cod":
@@ -20,6 +20,7 @@ const getPaymentStatusText = (status?: string) => {
   switch (status) {
     case "paid": return "Đã thanh toán";
     case "pending": return "Chờ thanh toán";
+    case "cancelled": return "Đã hủy thanh toán";
     case "unpaid":
     default: return "Chưa thanh toán";
   }
@@ -29,15 +30,34 @@ const OrderDetail = () => {
   const { id } = useParams();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
   const navigate = useNavigate();
 
+  const fetchOrder = () => {
+    if (!id) return;
+    setLoading(true);
+    orderService.getDetails(id)
+      .then(setOrder)
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
-    if (id) {
-      orderService.getDetails(id)
-        .then(setOrder)
-        .finally(() => setLoading(false));
-    }
+    fetchOrder();
   }, [id]);
+
+  const handleCancelOrder = async () => {
+    if (!id || !window.confirm("Bạn có chắc muốn hủy đơn hàng này?")) return;
+
+    setCancelling(true);
+    try {
+      await orderService.cancel(id);
+      fetchOrder();
+    } catch (err: any) {
+      alert(err.message || "Không thể hủy đơn hàng.");
+    } finally {
+      setCancelling(false);
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -106,12 +126,22 @@ const OrderDetail = () => {
               <div className="text-gray-600 space-y-2">
                 <p>{getPaymentMethodText(order.payment_method)}</p>
                 <p>
-                  Trạng thái: <span className={order.payment_status === "paid" ? "font-bold text-emerald-600" : "font-bold text-amber-600"}>{getPaymentStatusText(order.payment_status)}</span>
+                  Trạng thái: <span className={order.payment_status === "paid" ? "font-bold text-emerald-600" : order.payment_status === "cancelled" ? "font-bold text-red-600" : "font-bold text-amber-600"}>{getPaymentStatusText(order.payment_status)}</span>
                 </p>
-                {order.payment_method !== "cod" && order.payment_status !== "paid" && (
+                {order.payment_method === "card" && order.payment_status !== "paid" && order.status !== "cancelled" && (
                   <Link to={`/payment/${order.id}`} className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-indigo-700">
                     Thanh toán ngay
                   </Link>
+                )}
+                {["pending", "processing"].includes(order.status) && order.payment_status !== "paid" && (
+                  <button
+                    type="button"
+                    onClick={handleCancelOrder}
+                    disabled={cancelling}
+                    className="ml-2 inline-block border border-red-200 text-red-600 px-4 py-2 rounded-lg font-bold hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {cancelling ? "Đang hủy..." : "Hủy đơn"}
+                  </button>
                 )}
               </div>
             </div>

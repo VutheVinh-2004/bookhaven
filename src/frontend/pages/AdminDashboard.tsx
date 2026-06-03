@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { bookService, orderService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
-import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw } from "lucide-react";
 import { useNavigate, Routes, Route, Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
@@ -48,7 +48,7 @@ const AdminOverview = () => {
 
   const totalCategoryItems = (data?.categoryDistribution || []).reduce((sum: number, item: any) => sum + Number(item.count || 0), 0);
   const statCards = [
-    { title: "Tổng doanh thu", value: formatCurrency(data?.stats?.totalRevenue || 0), note: "Chỉ tính đơn đã giao", icon: <DollarSign className="text-emerald-600" />, bg: "bg-emerald-50" },
+    { title: "Tổng doanh thu", value: formatCurrency(data?.stats?.totalRevenue || 0), note: "Chỉ tính đơn đã thanh toán", icon: <DollarSign className="text-emerald-600" />, bg: "bg-emerald-50" },
     { title: "Người dùng", value: `${data?.stats?.totalUsers || 0}`, note: "Tài khoản khách hàng", icon: <Users className="text-amber-600" />, bg: "bg-amber-50" },
     { title: "Tổng đầu sách", value: `${data?.stats?.totalBooks || 0}`, note: "Sản phẩm trong kho", icon: <BookIcon className="text-indigo-600" />, bg: "bg-indigo-50" },
     { title: "Đơn chờ xử lý", value: `${data?.stats?.pendingOrders || 0}`, note: "Đơn pending + processing", icon: <ShoppingBag className="text-orange-600" />, bg: "bg-orange-50" },
@@ -451,81 +451,225 @@ const AdminOrders = () => {
     }
   };
 
+  const formatCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value || 0);
+  const formatDate = (value?: string) => value ? new Date(value).toLocaleDateString("vi-VN") : "-";
+
+  const getOrderStatus = (status?: string) => {
+    switch (status) {
+      case "pending":
+        return { label: "Chờ xử lý", className: "bg-amber-50 text-amber-700 ring-1 ring-amber-200" };
+      case "processing":
+        return { label: "Đang xử lý", className: "bg-sky-50 text-sky-700 ring-1 ring-sky-200" };
+      case "shipped":
+        return { label: "Đang giao", className: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200" };
+      case "delivered":
+        return { label: "Đã giao", className: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" };
+      case "cancelled":
+        return { label: "Đã hủy", className: "bg-red-50 text-red-700 ring-1 ring-red-200" };
+      default:
+        return { label: status || "Không rõ", className: "bg-gray-50 text-gray-700 ring-1 ring-gray-200" };
+    }
+  };
+
   const getPaymentStatus = (status?: string) => {
     switch (status) {
       case "paid":
-        return { label: "Đã thanh toán", className: "bg-emerald-100 text-emerald-700" };
+        return { label: "Đã thanh toán", className: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" };
       case "pending":
-        return { label: "Chờ thanh toán", className: "bg-amber-100 text-amber-700" };
+        return { label: "Chờ thanh toán", className: "bg-amber-50 text-amber-700 ring-1 ring-amber-200" };
+      case "cancelled":
+        return { label: "Đã hủy thanh toán", className: "bg-red-50 text-red-700 ring-1 ring-red-200" };
       case "unpaid":
       default:
-        return { label: "Chưa thanh toán", className: "bg-gray-100 text-gray-700" };
+        return { label: "Chưa thanh toán", className: "bg-gray-50 text-gray-700 ring-1 ring-gray-200" };
     }
+  };
+
+  const getPaymentMethodText = (method?: string) => {
+    switch (method) {
+      case "card":
+        return "Thẻ";
+      case "qr_code":
+        return "Không còn hỗ trợ";
+      case "cod":
+      default:
+        return "COD";
+    }
+  };
+
+  const getAllowedNextStatuses = (order: any) => {
+    const transitions: Record<string, string[]> = {
+      pending: ["processing", "cancelled"],
+      processing: ["shipped", "cancelled"],
+      shipped: ["delivered"],
+      delivered: [],
+      cancelled: []
+    };
+
+    return (transitions[order.status] || []).filter(status => {
+      if (status === "cancelled" && order.payment_status === "paid") return false;
+      if ((status === "shipped" || status === "delivered") && order.payment_method !== "cod" && order.payment_status !== "paid") return false;
+      return true;
+    });
+  };
+
+  const summary = {
+    total: orders.length,
+    pending: orders.filter(order => order.status === "pending" || order.status === "processing").length,
+    delivering: orders.filter(order => order.status === "shipped").length,
+    revenue: orders
+      .filter(order => order.payment_status === "paid")
+      .reduce((sum, order) => sum + Number(order.total_price || 0), 0),
   };
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold text-gray-900">Quản lý đơn hàng</h2>
-      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        <table className="w-full min-w-[920px] text-left border-collapse">
-          <thead className="bg-gray-50 border-b">
-            <tr>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">Mã ĐH</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">Khách hàng</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">SĐT</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">Tổng tiền</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">Thanh toán</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600">Trạng thái</th>
-              <th className="px-6 py-4 text-sm font-bold text-gray-600 text-right">Thao tác</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {orders.map(order => {
-              const paymentStatus = getPaymentStatus(order.payment_status);
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-950">Quản lý đơn hàng</h2>
+          <p className="text-sm text-gray-500 mt-1">Theo dõi xử lý, giao hàng và thanh toán của toàn bộ đơn.</p>
+        </div>
+        <button
+          type="button"
+          onClick={fetchOrders}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50"
+        >
+          <RefreshCw className="h-4 w-4" /> Làm mới
+        </button>
+      </div>
 
-              return (
-                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-bold text-gray-900">#ORD-{order.id}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{order.user_email}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{order.phone || "-"}</td>
-                  <td className="px-6 py-4 text-sm font-bold text-indigo-600">
-                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${paymentStatus.className}`}>
-                      {paymentStatus.label}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      order.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                      order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
-                      'bg-yellow-100 text-yellow-700'
-                    }`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
-                    <Link to={`/orders/${order.id}`} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg">
-                      <ChevronRight size={18} />
-                    </Link>
-                    <select
-                      className="text-sm border rounded p-1"
-                      value={order.status}
-                      onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
-                    >
-                      <option value="pending">Chờ xử lý</option>
-                      <option value="processing">Đang xử lý</option>
-                      <option value="shipped">Đang giao</option>
-                      <option value="delivered">Đã giao</option>
-                      <option value="cancelled">Đã hủy</option>
-                    </select>
-                  </td>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="rounded-xl bg-indigo-50 p-3 text-indigo-600"><Package className="h-5 w-5" /></div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Tổng</span>
+          </div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Tổng đơn hàng</p>
+          <p className="mt-1 text-2xl font-bold text-gray-950">{summary.total}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="rounded-xl bg-amber-50 p-3 text-amber-600"><Clock className="h-5 w-5" /></div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Chờ</span>
+          </div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Cần xử lý</p>
+          <p className="mt-1 text-2xl font-bold text-gray-950">{summary.pending}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="rounded-xl bg-sky-50 p-3 text-sky-600"><ShoppingBag className="h-5 w-5" /></div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Giao</span>
+          </div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Đang giao</p>
+          <p className="mt-1 text-2xl font-bold text-gray-950">{summary.delivering}</p>
+        </div>
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="rounded-xl bg-emerald-50 p-3 text-emerald-600"><DollarSign className="h-5 w-5" /></div>
+            <span className="text-xs font-bold text-gray-400 uppercase">Thu</span>
+          </div>
+          <p className="mt-4 text-sm font-medium text-gray-500">Doanh thu đã thanh toán</p>
+          <p className="mt-1 text-xl font-bold text-gray-950">{formatCurrency(summary.revenue)}</p>
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="border-b border-gray-100 px-5 py-4">
+          <h3 className="font-bold text-gray-950">Danh sách đơn hàng</h3>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-16">
+            <div className="h-10 w-10 animate-spin rounded-full border-b-2 border-indigo-600"></div>
+          </div>
+        ) : orders.length === 0 ? (
+          <div className="py-16 text-center">
+            <Package className="mx-auto h-10 w-10 text-gray-300" />
+            <p className="mt-3 font-semibold text-gray-700">Chưa có đơn hàng</p>
+            <p className="mt-1 text-sm text-gray-500">Khi khách đặt hàng, đơn sẽ hiển thị ở đây.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1080px] text-left border-collapse">
+              <thead className="bg-gray-50/80">
+                <tr>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Đơn hàng</th>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Khách hàng</th>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Liên hệ</th>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Thanh toán</th>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Trạng thái</th>
+                  <th className="px-5 py-3 text-xs font-bold uppercase tracking-wide text-gray-500">Cập nhật</th>
+                  <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-wide text-gray-500">Chi tiết</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {orders.map(order => {
+                  const paymentStatus = getPaymentStatus(order.payment_status);
+                  const orderStatus = getOrderStatus(order.status);
+                  const allowedNextStatuses = getAllowedNextStatuses(order);
+
+                  return (
+                    <tr key={order.id} className="align-top hover:bg-gray-50/70 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="font-bold text-gray-950">#ORD-{order.id}</div>
+                        <div className="mt-1 text-xs text-gray-500">{formatDate(order.created_at)}</div>
+                        <div className="mt-2 font-bold text-indigo-600">{formatCurrency(order.total_price)}</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="max-w-[220px] truncate font-semibold text-gray-900">{order.user_name || order.user_email}</div>
+                        <div className="mt-1 max-w-[220px] truncate text-xs text-gray-500">{order.user_email}</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2 text-sm text-gray-700">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <span>{order.phone || "-"}</span>
+                        </div>
+                        <div className="mt-2 flex items-start gap-2 text-xs text-gray-500">
+                          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+                          <span className="line-clamp-2 max-w-[260px]">{order.shipping_address || "-"}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${paymentStatus.className}`}>
+                          {paymentStatus.label}
+                        </span>
+                        <div className="mt-2 text-xs font-medium text-gray-500">{getPaymentMethodText(order.payment_method)}</div>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${orderStatus.className}`}>
+                          {orderStatus.label}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <select
+                          className="w-40 rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:bg-gray-50 disabled:text-gray-400"
+                          value={order.status}
+                          disabled={allowedNextStatuses.length === 0}
+                          onChange={(e) => handleStatusUpdate(order.id, e.target.value)}
+                        >
+                          <option value={order.status}>{orderStatus.label}</option>
+                          {allowedNextStatuses.includes("processing") && <option value="processing">Đang xử lý</option>}
+                          {allowedNextStatuses.includes("shipped") && <option value="shipped">Đang giao</option>}
+                          {allowedNextStatuses.includes("delivered") && <option value="delivered">Đã giao</option>}
+                          {allowedNextStatuses.includes("cancelled") && <option value="cancelled">Đã hủy</option>}
+                        </select>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <Link
+                          to={`/orders/${order.id}`}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-indigo-100 text-indigo-600 hover:bg-indigo-50"
+                          aria-label={`Xem chi tiết đơn #ORD-${order.id}`}
+                        >
+                          <ChevronRight size={18} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

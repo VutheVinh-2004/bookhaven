@@ -31,8 +31,12 @@ export const register = async (req: Request, res: Response) => {
   if (hasErrors(errors)) return fail(res, 400, "Dữ liệu đăng ký không hợp lệ.", errors);
 
   try {
-    const existingUser = db.prepare("SELECT id FROM users WHERE email = ?").get(email);
-    if (existingUser) return fail(res, 409, "Email đã tồn tại.");
+    const existingUser = db.prepare("SELECT id, is_active FROM users WHERE email = ?").get(email) as { id: number; is_active: number } | undefined;
+    if (existingUser) {
+      return fail(res, 409, existingUser.is_active
+        ? "Email đã tồn tại."
+        : "Tài khoản đã bị vô hiệu hóa. Vui lòng liên hệ quản trị viên.");
+    }
 
     const hashedPassword = await bcrypt.hash(password, 12);
     const verificationToken = createEmailVerificationToken();
@@ -71,6 +75,7 @@ export const login = async (req: Request, res: Response) => {
   try {
     const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
     if (!user) return fail(res, 404, "Tài khoản không tồn tại.");
+    if (!user.is_active) return fail(res, 403, "Tài khoản đã bị vô hiệu hóa.");
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) return fail(res, 400, "Email hoặc mật khẩu không chính xác.");

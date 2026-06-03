@@ -25,6 +25,7 @@ router.delete("/cart/:id", authenticateToken, orderController.removeFromCart);
 router.post("/orders", authenticateToken, orderController.createOrder);
 router.get("/orders/my", authenticateToken, orderController.getMyOrders);
 router.post("/orders/:id/pay-test", authenticateToken, orderController.payOrderTest);
+router.put("/orders/:id/cancel", authenticateToken, orderController.cancelMyOrder);
 router.get("/orders/:id", authenticateToken, orderController.getOrderDetails);
 
 router.post("/admin/categories", authenticateToken, authorizeRoles("admin", "super_admin"), bookController.createCategory);
@@ -39,6 +40,7 @@ router.put("/admin/orders/:id/status", authenticateToken, authorizeRoles("admin"
 
 router.get("/superadmin/users", authenticateToken, authorizeRoles("super_admin"), userController.getAllUsers);
 router.put("/superadmin/users/:id/role", authenticateToken, authorizeRoles("super_admin"), userController.updateUserRole);
+router.put("/superadmin/users/:id/reactivate", authenticateToken, authorizeRoles("super_admin"), userController.reactivateUser);
 router.delete("/superadmin/users/:id", authenticateToken, authorizeRoles("super_admin"), userController.deleteUser);
 
 export default router;

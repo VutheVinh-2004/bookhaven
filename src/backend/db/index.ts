@@ -52,6 +52,7 @@ export function initDb() {
       email_verified INTEGER NOT NULL DEFAULT 0,
       email_verification_token TEXT,
       email_verification_expires_at DATETIME,
+      is_active INTEGER NOT NULL DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
@@ -65,6 +66,9 @@ export function initDb() {
   }
   if (!hasColumn("users", "email_verification_expires_at")) {
     db.exec("ALTER TABLE users ADD COLUMN email_verification_expires_at DATETIME");
+  }
+  if (!hasColumn("users", "is_active")) {
+    db.exec("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1");
   }
   if (addedEmailVerified) {
     db.prepare("UPDATE users SET email_verified = 1 WHERE email_verified = 0").run();
@@ -81,6 +85,7 @@ export function initDb() {
       phone TEXT,
       payment_method TEXT DEFAULT 'cod',
       payment_status TEXT DEFAULT 'unpaid',
+      paid_at DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users (id)
     )
@@ -100,6 +105,10 @@ export function initDb() {
     db.exec("ALTER TABLE orders ADD COLUMN payment_status TEXT DEFAULT 'unpaid'");
     db.prepare("UPDATE orders SET payment_status = 'unpaid' WHERE payment_method = 'cod'").run();
   }
+  if (!hasColumn("orders", "paid_at")) {
+    db.exec("ALTER TABLE orders ADD COLUMN paid_at DATETIME");
+  }
+  db.prepare("UPDATE orders SET paid_at = created_at WHERE payment_status = 'paid' AND paid_at IS NULL").run();
 
   // Order Items table
   db.exec(`

@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2, CreditCard, Loader2, LockKeyhole, QrCode } from "lucide-react";
+import { CheckCircle2, CreditCard, Loader2, LockKeyhole } from "lucide-react";
 import { orderService } from "../services/api.ts";
 
-const QR_IMAGE_URL = "/payment-qr.png.jpg";
 const TEST_CARD = {
   number: "9704000000000018",
   holder: "NGUYEN VAN A",
@@ -23,7 +22,7 @@ const maskCard = (value: string) => {
 const getPaymentMethodText = (method?: string) => {
   switch (method) {
     case "card": return "Thanh toán bằng thẻ";
-    case "qr_code": return "Thanh toán bằng QR";
+    case "qr_code": return "Phương thức không còn hỗ trợ";
     case "cod":
     default: return "Thanh toán khi nhận hàng";
   }
@@ -108,17 +107,21 @@ const PaymentTest = () => {
   }
 
   const isCard = order.payment_method === "card";
-  const isQr = order.payment_method === "qr_code";
 
-  if (isQr) {
+  if (order.payment_method !== "card") {
     return (
       <div className="max-w-lg mx-auto">
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 text-center">
-          <img
-            src={QR_IMAGE_URL}
-            alt="QR thanh toán"
-            className="mx-auto w-full max-w-[360px] rounded-xl bg-white object-contain"
-          />
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+          <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h1 className="text-xl font-bold text-gray-900">Đơn hàng không cần thanh toán online</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            {order.payment_method === "cod"
+              ? "Đơn COD sẽ được thanh toán khi bạn nhận hàng."
+              : "Phương thức thanh toán của đơn hàng này không còn được hỗ trợ."}
+          </p>
+          <Link to={`/orders/${order.id}`} className="inline-block mt-6 text-indigo-600 font-bold hover:underline">
+            Xem chi tiết đơn hàng
+          </Link>
         </div>
       </div>
     );
@@ -129,7 +132,7 @@ const PaymentTest = () => {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-8 bg-indigo-600 text-white">
           <div className="flex items-center gap-3">
-            {isCard ? <CreditCard className="h-8 w-8" /> : <QrCode className="h-8 w-8" />}
+            <CreditCard className="h-8 w-8" />
             <div>
               <h1 className="text-2xl font-bold">Thanh toán đơn #ORD-{order.id}</h1>
               <p className="text-indigo-100 mt-1">{getPaymentMethodText(order.payment_method)}</p>
@@ -150,7 +153,7 @@ const PaymentTest = () => {
               </div>
             </div>
 
-            {isCard && cardStep === "details" && (
+            {isCard && !paid && cardStep === "details" && (
               <div className="border rounded-2xl p-5 space-y-5">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div>
@@ -190,7 +193,7 @@ const PaymentTest = () => {
               </div>
             )}
 
-            {isCard && cardStep === "otp" && (
+            {isCard && !paid && cardStep === "otp" && (
               <div className="border rounded-2xl p-5 space-y-5">
                 <div className="text-center">
                   <div className="h-14 w-14 rounded-full bg-indigo-50 text-indigo-600 mx-auto grid place-items-center">
@@ -233,7 +236,7 @@ const PaymentTest = () => {
 
             {isCard && paid && (
               <div className="bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-xl p-4 flex items-center gap-2 font-semibold">
-                <CheckCircle2 className="h-5 w-5" /> Thanh toán thành công. Đang chuyển đến chi tiết đơn hàng...
+                <CheckCircle2 className="h-5 w-5" /> Đơn hàng đã được thanh toán.
               </div>
             )}
 
