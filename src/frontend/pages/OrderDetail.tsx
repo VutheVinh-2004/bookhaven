@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { orderService } from "../services/api.ts";
 import { ArrowLeft, Package, MapPin, Calendar, CreditCard, Clock, CheckCircle, Truck, XCircle } from "lucide-react";
+import { useToast } from "../context/ToastContext.tsx";
 
 const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=BookHaven";
 
@@ -32,6 +33,7 @@ const OrderDetail = () => {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const fetchOrder = () => {
     if (!id) return;
@@ -51,9 +53,10 @@ const OrderDetail = () => {
     setCancelling(true);
     try {
       await orderService.cancel(id);
+      showToast("Đã hủy đơn hàng.", "success");
       fetchOrder();
     } catch (err: any) {
-      alert(err.message || "Không thể hủy đơn hàng.");
+      showToast(err.message || "Không thể hủy đơn hàng.", "error");
     } finally {
       setCancelling(false);
     }

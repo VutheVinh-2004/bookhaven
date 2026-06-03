@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { CheckCircle2, CreditCard, Loader2, LockKeyhole } from "lucide-react";
 import { orderService } from "../services/api.ts";
+import { useToast } from "../context/ToastContext.tsx";
 
 const TEST_CARD = {
   number: "9704000000000018",
@@ -31,6 +32,7 @@ const getPaymentMethodText = (method?: string) => {
 const PaymentTest = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
@@ -90,9 +92,10 @@ const PaymentTest = () => {
     try {
       await orderService.payTest(id);
       setPaid(true);
+      showToast("Thanh toán thành công.", "success");
       window.setTimeout(() => navigate(`/orders/${id}`), 1200);
     } catch (err: any) {
-      alert(err.message || "Không thể thanh toán.");
+      showToast(err.message || "Không thể thanh toán.", "error");
     } finally {
       setPaying(false);
     }

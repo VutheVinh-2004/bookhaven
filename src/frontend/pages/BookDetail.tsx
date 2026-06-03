@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { bookService, cartService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
+import { useToast } from "../context/ToastContext.tsx";
 import { ShoppingCart, ArrowLeft, Check, AlertCircle } from "lucide-react";
 
 const BookDetail = () => {
@@ -13,6 +14,7 @@ const BookDetail = () => {
   const [adding, setAdding] = useState(false);
   const [success, setSuccess] = useState(false);
   const { user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -51,7 +53,7 @@ const BookDetail = () => {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      alert(err.message || "Có lỗi xảy ra khi thêm vào giỏ hàng");
+      showToast(err.message || "Không thể thêm sách vào giỏ hàng.", "error");
     } finally {
       setAdding(false);
     }
@@ -159,7 +161,7 @@ const BookDetail = () => {
                     await cartService.add(book.id, quantity);
                     navigate("/cart");
                   } catch (err: any) {
-                    alert(err.message || "Có lỗi xảy ra");
+                    showToast(err.message || "Không thể thêm sách vào giỏ hàng.", "error");
                   }
                 }}
                 disabled={adding || book.stock === 0}

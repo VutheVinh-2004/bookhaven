@@ -3,11 +3,13 @@ import { orderService } from "../services/api.ts";
 import { Package, Clock, CheckCircle, Truck, XCircle, ChevronRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext.tsx";
 import { Link } from "react-router-dom";
+import { useToast } from "../context/ToastContext.tsx";
 
 const MyOrders = () => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { showToast } = useToast();
 
   const fetchOrders = () => {
     if (!user) return;
@@ -31,9 +33,10 @@ const MyOrders = () => {
 
     try {
       await orderService.cancel(id);
+      showToast("Đã hủy đơn hàng.", "success");
       fetchOrders();
     } catch (err: any) {
-      alert(err.message || "Không thể hủy đơn hàng.");
+      showToast(err.message || "Không thể hủy đơn hàng.", "error");
     }
   };
 

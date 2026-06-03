@@ -91,7 +91,7 @@ export const login = async (req: Request, res: Response) => {
 
 export const resendVerificationEmail = async (req: Request, res: Response) => {
   const email = typeof req.body.email === "string" ? normalizeEmail(req.body.email) : "";
-  if (!isEmail(email)) return fail(res, 400, "Email khong dung dinh dang.");
+  if (!isEmail(email)) return fail(res, 400, "Email không đúng định dạng.");
 
   try {
     const user = db.prepare(
@@ -99,10 +99,10 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
     ).get(email) as any;
 
     if (!user) {
-      return ok(res, null, "Neu email ton tai va chua xac nhan, BookHaven se gui lai lien ket xac nhan.");
+      return ok(res, null, "Nếu email tồn tại và chưa xác nhận, BookHaven sẽ gửi lại liên kết xác nhận.");
     }
     if (user.email_verified) {
-      return ok(res, null, "Tai khoan da duoc xac nhan email.");
+      return ok(res, null, "Tài khoản đã được xác nhận email.");
     }
 
     const verificationToken = createEmailVerificationToken();
@@ -119,7 +119,7 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
       return ok(
         res,
         { verificationUrl },
-        "SMTP chua cau hinh. Da tao lai lien ket xac nhan cho moi truong phat trien."
+        "SMTP chưa cấu hình. Đã tạo lại liên kết xác nhận cho môi trường phát triển."
       );
     }
 
@@ -132,11 +132,11 @@ export const resendVerificationEmail = async (req: Request, res: Response) => {
     return ok(
       res,
       process.env.NODE_ENV !== "production" ? { verificationUrl } : null,
-      "Da gui lai email xac nhan."
+      "Đã gửi lại email xác nhận."
     );
   } catch (error) {
     console.error("Resend verification email error:", error);
-    return fail(res, 500, "Khong the gui lai email xac nhan.");
+    return fail(res, 500, "Không thể gửi lại email xác nhận.");
   }
 };
 

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cartService, orderService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
+import { useToast } from "../context/ToastContext.tsx";
 
 const FALLBACK_BOOK_COVER = "https://placehold.co/200x300/e5e7eb/6b7280?text=BookHaven";
 
@@ -61,7 +62,9 @@ const Cart = () => {
   const [ordering, setOrdering] = useState(false);
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [addressLoading, setAddressLoading] = useState(true);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const { user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const fetchCart = () => {
@@ -106,7 +109,7 @@ const Cart = () => {
       await cartService.update(id, q);
       fetchCart();
     } catch (err: any) {
-      alert(err.message || "Lỗi cập nhật số lượng");
+      showToast(err.message || "Không thể cập nhật số lượng.", "error");
       fetchCart();
     }
   };
@@ -132,12 +135,13 @@ const Cart = () => {
     try {
       await cartService.remove(id);
       fetchCart();
-    } catch {
-      alert("Lỗi xóa sản phẩm");
+    } catch (err: any) {
+      showToast(err.message || "Không thể xóa sản phẩm.", "error");
     }
   };
 
   const handleOrder = async () => {
+    setFieldErrors({});
     const normalizedStreet = streetAddress.trim();
     const normalizedProvince = province.trim();
     const normalizedDistrict = district.trim();
@@ -145,18 +149,16 @@ const Cart = () => {
     const normalizedAddress = `${normalizedStreet}, ${normalizedWard}, ${normalizedDistrict}, ${normalizedProvince}`.replace(/\s+/g, " ").trim();
     const normalizedPhone = phone.replace(/[\s.-]/g, "").trim();
 
-    if (!normalizedStreet || !normalizedProvince || !normalizedDistrict || !normalizedWard || !normalizedPhone) {
-      alert("Vui lòng nhập số nhà/đường và chọn đủ Tỉnh/Thành, Quận/Huyện, Phường/Xã cùng số điện thoại.");
-      return;
-    }
+    const errors: Record<string, string> = {};
+    if (!normalizedStreet) errors.streetAddress = "Vui lòng nhập số nhà và tên đường.";
+    if (!normalizedProvince || !normalizedDistrict || !normalizedWard) errors.address = "Vui lòng chọn đầy đủ Tỉnh/Thành, Quận/Huyện và Phường/Xã.";
+    if (normalizedAddress.length < 5 || normalizedAddress.length > 255) errors.streetAddress = "Địa chỉ giao hàng phải từ 5 đến 255 ký tự.";
+    if (!normalizedPhone) errors.phone = "Vui lòng nhập số điện thoại.";
+    else if (!/^(0|\+84)[0-9]{8,10}$/.test(normalizedPhone)) errors.phone = "Số điện thoại Việt Nam không hợp lệ.";
 
-    if (normalizedAddress.length < 5 || normalizedAddress.length > 255) {
-      alert("Địa chỉ giao hàng phải từ 5 đến 255 ký tự.");
-      return;
-    }
-
-    if (!/^(0|\+84)[0-9]{8,10}$/.test(normalizedPhone)) {
-      alert("Số điện thoại Việt Nam không hợp lệ.");
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      showToast("Vui lòng kiểm tra lại thông tin giao hàng.", "error");
       return;
     }
 
@@ -164,13 +166,20 @@ const Cart = () => {
     try {
       const order = await orderService.create({ shipping_address: normalizedAddress, phone: normalizedPhone, payment_method: paymentMethod });
       if (paymentMethod === "cod") {
-        alert("Đặt hàng thành công!");
+        showToast("Đặt hàng thành công.", "success");
         navigate("/orders");
       } else {
         navigate(`/payment/${order.id}`);
       }
     } catch (err: any) {
-      alert(err.message);
+      if (err?.errors && typeof err.errors === "object") {
+        setFieldErrors({
+          streetAddress: err.errors.shipping_address,
+          phone: err.errors.phone,
+          paymentMethod: err.errors.payment_method
+        });
+      }
+      showToast(err.message || "Không thể tạo đơn hàng.", "error");
     } finally {
       setOrdering(false);
     }
@@ -304,11 +313,12 @@ const Cart = () => {
                     <MapPin className="h-4 w-4 mr-1 text-indigo-600" /> Địa chỉ giao hàng
                   </label>
                   <input
-                    className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none ${fieldErrors.streetAddress ? "border-red-300" : "border-gray-200"}`}
                     placeholder="Số nhà, tên đường..."
                     value={streetAddress}
                     onChange={(e) => setStreetAddress(e.target.value)}
                   />
+                  {fieldErrors.streetAddress && <p className="text-xs font-medium text-red-600">{fieldErrors.streetAddress}</p>}
                   <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 ${hasAddressDirectory ? "" : "hidden"}`}>
                     <select
                       className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
@@ -354,24 +364,25 @@ const Cart = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                        placeholder="Tinh/Thanh"
+                        placeholder="Tỉnh/Thành"
                         value={province}
                         onChange={(e) => setProvince(e.target.value)}
                       />
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                        placeholder="Quan/Huyen"
+                        placeholder="Quận/Huyện"
                         value={district}
                         onChange={(e) => setDistrict(e.target.value)}
                       />
                       <input
                         className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none sm:col-span-2"
-                        placeholder="Phuong/Xa"
+                        placeholder="Phường/Xã"
                         value={ward}
                         onChange={(e) => setWard(e.target.value)}
                       />
                     </div>
                   )}
+                  {fieldErrors.address && <p className="text-xs font-medium text-red-600">{fieldErrors.address}</p>}
                   {addressLoading && <p className="text-xs text-gray-500">Đang tải danh sách địa chỉ toàn quốc...</p>}
 
                   <div className="space-y-3 pt-2">
@@ -380,7 +391,7 @@ const Cart = () => {
                     </label>
                     <input
                       type="tel"
-                      className="w-full p-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                      className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none ${fieldErrors.phone ? "border-red-300" : "border-gray-200"}`}
                       placeholder="Nhập số điện thoại liên hệ..."
                       value={phone}
                       inputMode="numeric"
@@ -391,6 +402,7 @@ const Cart = () => {
                         setPhone(pasted.replace(/\D/g, ""));
                       }}
                     />
+                    {fieldErrors.phone && <p className="text-xs font-medium text-red-600">{fieldErrors.phone}</p>}
                   </div>
                 </div>
 

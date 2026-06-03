@@ -4,6 +4,7 @@ import { Search, ChevronLeft, ChevronRight, ShoppingCart } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "motion/react";
 import { useAuth } from "../context/AuthContext.tsx";
+import { useToast } from "../context/ToastContext.tsx";
 
 const Home = () => {
   const [books, setBooks] = useState<any[]>([]);
@@ -13,6 +14,7 @@ const Home = () => {
   const [selectedCategory, setSelectedCategory] = useState("");
   const [activePromoSlide, setActivePromoSlide] = useState(0);
   const { user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -71,8 +73,8 @@ const Home = () => {
   useEffect(() => {
     bookService.getCategories()
       .then(setCategories)
-      .catch(err => console.error("Failed to fetch categories:", err));
-  }, []);
+      .catch(() => showToast("Không thể tải danh mục sách.", "error"));
+  }, [showToast]);
 
   useEffect(() => {
     setLoading(true);
@@ -89,12 +91,12 @@ const Home = () => {
       .then(data => {
         setBooks(data.books || []);
       })
-      .catch(err => {
-        console.error("Failed to fetch books:", err);
+      .catch(() => {
+        showToast("Không thể tải danh sách sách.", "error");
         setBooks([]);
       })
       .finally(() => setLoading(false));
-  }, [search, selectedCategory]);
+  }, [search, selectedCategory, showToast]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,7 +247,7 @@ const Home = () => {
                       await cartService.add(book.id, 1);
                       navigate("/cart");
                     } catch (err: any) {
-                      alert(err.message || "Có lỗi xảy ra");
+                      showToast(err.message || "Không thể thêm sách vào giỏ hàng.", "error");
                     }
                   }}
                   className="mt-2 w-full bg-indigo-50 text-indigo-700 py-2 rounded-lg text-xs font-bold hover:bg-indigo-600 hover:text-white transition-all flex items-center justify-center gap-1"

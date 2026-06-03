@@ -63,11 +63,11 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
   const info = await transporter.sendMail({
     from,
     to,
-    subject: "Xac nhan dang ky tai khoan BookHaven",
+    subject: "Xác nhận đăng ký tài khoản BookHaven",
     text: [
       `Xin chao ${fullName},`,
       "",
-      "Cam on ban da dang ky BookHaven. Vui long bam vao lien ket ben duoi de xac nhan email:",
+      "Cảm ơn bạn đã đăng ký BookHaven. Vui lòng bấm vào liên kết bên dưới để xác nhận email:",
       verificationUrl,
       "",
       "Lien ket co hieu luc trong 24 gio."
@@ -76,7 +76,7 @@ export const sendVerificationEmail = async ({ to, fullName, token }: Verificatio
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827">
         <h2>Xac nhan dang ky BookHaven</h2>
         <p>Xin chao ${safeFullName},</p>
-        <p>Cam on ban da dang ky BookHaven. Bam nut ben duoi de xac nhan email va kich hoat tai khoan.</p>
+        <p>Cảm ơn bạn đã đăng ký BookHaven. Bấm nút bên dưới để xác nhận email và kích hoạt tài khoản.</p>
         <p>
           <a href="${safeVerificationUrl}" style="display:inline-block;background:#4f46e5;color:#fff;text-decoration:none;padding:12px 18px;border-radius:8px;font-weight:bold">
             Xac nhan email

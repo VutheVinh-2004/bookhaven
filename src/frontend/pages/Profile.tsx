@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { authService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
-import { User, Lock, Mail, CheckCircle, AlertCircle } from "lucide-react";
+import { User, Lock, CheckCircle, AlertCircle } from "lucide-react";
 
 const Profile = () => {
   const { user, login } = useAuth();
@@ -11,6 +11,7 @@ const Profile = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: "", text: "" });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const isValidFullName = (value: string) => {
     const trimmed = value.trim();
@@ -28,19 +29,25 @@ const Profile = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage({ type: "", text: "" });
+    setFieldErrors({});
 
     if (!isValidFullName(fullName)) {
-      setMessage({ type: "error", text: "Họ tên chỉ được chứa chữ và khoảng trắng, dài từ 2 đến 100 ký tự." });
+      setFieldErrors({ fullName: "Họ tên chỉ được chứa chữ và khoảng trắng, dài từ 2 đến 100 ký tự." });
       return;
     }
 
     if (newPassword && newPassword !== confirmPassword) {
-      setMessage({ type: "error", text: "Mật khẩu mới không khớp" });
+      setFieldErrors({ confirmPassword: "Mật khẩu mới không khớp." });
       return;
     }
 
     if (newPassword && !isStrongPassword(newPassword)) {
-      setMessage({ type: "error", text: "Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ và số." });
+      setFieldErrors({ newPassword: "Mật khẩu mới phải có ít nhất 8 ký tự, gồm chữ và số." });
+      return;
+    }
+
+    if (newPassword && !currentPassword) {
+      setFieldErrors({ currentPassword: "Vui lòng nhập mật khẩu hiện tại." });
       return;
     }
 
@@ -57,11 +64,12 @@ const Profile = () => {
         login({ token, user: updatedUser });
       }
       
-      setMessage({ type: "success", text: "Cap nhat thong tin thanh cong." });
+      setMessage({ type: "success", text: "Cập nhật thông tin thành công." });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
     } catch (err: any) {
+      if (err?.errors && typeof err.errors === "object") setFieldErrors(err.errors);
       setMessage({ type: "error", text: err.message });
     } finally {
       setLoading(false);
@@ -103,6 +111,7 @@ const Profile = () => {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
               />
+              {fieldErrors.fullName && <p className="text-xs font-medium text-red-600">{fieldErrors.fullName}</p>}
             </div>
 
             <div className="pt-6 border-t space-y-4">
@@ -121,6 +130,7 @@ const Profile = () => {
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                   />
+                  {fieldErrors.currentPassword && <p className="text-xs font-medium text-red-600">{fieldErrors.currentPassword}</p>}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -133,6 +143,7 @@ const Profile = () => {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                     />
+                    {fieldErrors.newPassword && <p className="text-xs font-medium text-red-600">{fieldErrors.newPassword}</p>}
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-700">Nhập lại mật khẩu mới</label>
@@ -143,6 +154,7 @@ const Profile = () => {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                     />
+                    {fieldErrors.confirmPassword && <p className="text-xs font-medium text-red-600">{fieldErrors.confirmPassword}</p>}
                   </div>
                 </div>
               </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { bookService, orderService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
+import { useToast } from "../context/ToastContext.tsx";
 import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw } from "lucide-react";
 import { useNavigate, Routes, Route, Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
@@ -149,6 +150,7 @@ const AdminOverview = () => {
 };
 
 const AdminBooks = () => {
+  const { showToast } = useToast();
   const [books, setBooks] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -229,8 +231,8 @@ const AdminBooks = () => {
       }
       setIsModalOpen(false);
       fetchBooks();
-    } catch (err) {
-      console.error("Lỗi lưu thông tin:", err);
+    } catch (err: any) {
+      showToast(err.message || "Không thể lưu thông tin sách.", "error");
     }
   };
 
@@ -238,8 +240,8 @@ const AdminBooks = () => {
     try {
       await bookService.delete(id);
       fetchBooks();
-    } catch (err) {
-      console.error("Lỗi xóa sách:", err);
+    } catch (err: any) {
+      showToast(err.message || "Không thể xóa sách.", "error");
     }
   };
 
@@ -428,6 +430,7 @@ const AdminBooks = () => {
 };
 
 const AdminOrders = () => {
+  const { showToast } = useToast();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -446,8 +449,8 @@ const AdminOrders = () => {
     try {
       await orderService.updateStatus(id, status);
       fetchOrders();
-    } catch (err) {
-      console.error("Lỗi cập nhật trạng thái:", err);
+    } catch (err: any) {
+      showToast(err.message || "Không thể cập nhật trạng thái đơn hàng.", "error");
     }
   };
 
@@ -676,6 +679,7 @@ const AdminOrders = () => {
 };
 
 const AdminCategories = () => {
+  const { showToast } = useToast();
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -705,7 +709,7 @@ const AdminCategories = () => {
       setName("");
       fetchCategories();
     } catch (err: any) {
-      alert(err.message);
+      showToast(err.message || "Không thể lưu danh mục.", "error");
     }
   };
 
@@ -715,7 +719,7 @@ const AdminCategories = () => {
         await bookService.deleteCategory(id);
         fetchCategories();
       } catch (err: any) {
-        alert(err.message);
+        showToast(err.message || "Không thể xóa danh mục.", "error");
       }
     }
   };

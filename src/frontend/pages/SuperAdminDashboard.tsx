@@ -3,6 +3,7 @@ import { userService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { Shield, Users, Trash2, UserPlus, ShieldAlert } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useToast } from "../context/ToastContext.tsx";
 
 const SuperAdminDashboard = () => {
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -13,6 +14,7 @@ const SuperAdminDashboard = () => {
   const [accountStatus, setAccountStatus] = useState<"active" | "inactive">("active");
   const { user: currentUser, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const fetchUsers = () => {
     setLoading(true);
@@ -53,9 +55,10 @@ const SuperAdminDashboard = () => {
   const handleRoleUpdate = async (id: number, role: string) => {
     try {
       await userService.updateRole(id, role);
+      showToast("Đã cập nhật quyền người dùng.", "success");
       fetchUsers();
-    } catch (err) {
-      console.error("Lỗi cập nhật quyền:", err);
+    } catch (err: any) {
+      showToast(err.message || "Không thể cập nhật quyền người dùng.", "error");
     }
   };
 
@@ -64,18 +67,20 @@ const SuperAdminDashboard = () => {
 
     try {
       await userService.delete(id);
+      showToast("Đã vô hiệu hóa tài khoản.", "success");
       fetchUsers();
     } catch (err: any) {
-      console.error("Lỗi vô hiệu hóa người dùng:", err.message);
+      showToast(err.message || "Không thể vô hiệu hóa tài khoản.", "error");
     }
   };
 
   const handleReactivateUser = async (id: number) => {
     try {
       await userService.reactivate(id);
+      showToast("Đã khôi phục tài khoản.", "success");
       fetchUsers();
     } catch (err: any) {
-      console.error("Lỗi khôi phục người dùng:", err.message);
+      showToast(err.message || "Không thể khôi phục tài khoản.", "error");
     }
   };
 

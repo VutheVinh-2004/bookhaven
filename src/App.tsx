@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useNavigate } from "react-router-dom";
 import { ShoppingCart, User, LogOut, Search, Menu, X } from "lucide-react";
 import { AuthProvider, useAuth } from "./frontend/context/AuthContext.tsx";
+import { ToastProvider } from "./frontend/context/ToastContext.tsx";
 import Home from "./frontend/pages/Home.tsx";
 import Login from "./frontend/pages/Login.tsx";
 import Register from "./frontend/pages/Register.tsx";
@@ -14,6 +15,7 @@ import PaymentTest from "./frontend/pages/PaymentTest.tsx";
 import Profile from "./frontend/pages/Profile.tsx";
 import CategoryBooks from "./frontend/pages/CategoryBooks.tsx";
 import SearchResults from "./frontend/pages/SearchResults.tsx";
+import NotFound from "./frontend/pages/NotFound.tsx";
 
 const AdminDashboard = React.lazy(() => import("./frontend/pages/AdminDashboard.tsx"));
 const SuperAdminDashboard = React.lazy(() => import("./frontend/pages/SuperAdminDashboard.tsx"));
@@ -154,8 +156,9 @@ const Navbar = () => {
 export default function App() {
   return (
     <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50 flex flex-col">
+      <ToastProvider>
+        <Router>
+          <div className="min-h-screen bg-gray-50 flex flex-col">
           <Navbar />
           <main className="flex-grow container mx-auto px-4 py-8">
             <Routes>
@@ -171,17 +174,19 @@ export default function App() {
               <Route path="/orders" element={<MyOrders />} />
               <Route path="/orders/:id" element={<OrderDetail />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/admin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Dang tai...</div>}><AdminDashboard /></React.Suspense>} />
-              <Route path="/superadmin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Dang tai...</div>}><SuperAdminDashboard /></React.Suspense>} />
+              <Route path="/admin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Đang tải...</div>}><AdminDashboard /></React.Suspense>} />
+              <Route path="/superadmin/*" element={<React.Suspense fallback={<div className="flex justify-center py-20">Đang tải...</div>}><SuperAdminDashboard /></React.Suspense>} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </main>
           <footer className="bg-gray-800 text-white py-8">
             <div className="max-w-7xl mx-auto px-4 text-center">
-              <p>&copy; 2026 BookHaven. Hệ thống bán sách trực tuyến mô phỏng Spring Boot/Angular.</p>
+              <p>&copy; 2026 BookHaven. Nền tảng bán sách trực tuyến xây dựng với React, Express và SQLite.</p>
             </div>
           </footer>
-        </div>
-      </Router>
+          </div>
+        </Router>
+      </ToastProvider>
     </AuthProvider>
   );
 }

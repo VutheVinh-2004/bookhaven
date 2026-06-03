@@ -30,13 +30,13 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
   const [scheme, token] = authHeader?.split(" ") ?? [];
 
   if (scheme !== "Bearer" || !token) {
-    return fail(res, 401, "Ban can dang nhap de su dung chuc nang nay.");
+    return fail(res, 401, "Bạn cần đăng nhập để sử dụng chức năng này.");
   }
 
   try {
     const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload & Pick<AuthUser, "id" | "email">;
     if (!decoded.id || !decoded.email) {
-      return fail(res, 403, "Token khong hop le.");
+      return fail(res, 401, "Phiên đăng nhập không hợp lệ.");
     }
 
     const user = db.prepare(
@@ -44,20 +44,20 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     ).get(Number(decoded.id), decoded.email) as AuthUser | undefined;
 
     if (!user) {
-      return fail(res, 403, "Token khong hop le hoac tai khoan khong con hoat dong.");
+      return fail(res, 401, "Phiên đăng nhập không hợp lệ hoặc tài khoản không còn hoạt động.");
     }
 
     req.user = { id: Number(user.id), email: user.email, role: user.role };
     next();
   } catch {
-    return fail(res, 403, "Token da het han hoac khong hop le.");
+    return fail(res, 401, "Phiên đăng nhập đã hết hạn hoặc không hợp lệ.");
   }
 };
 
 export const authorizeRoles = (...roles: AuthUser["role"][]) => {
   return (req: AuthRequest, res: Response, next: NextFunction) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return fail(res, 403, "Ban khong co quyen thuc hien thao tac nay.");
+      return fail(res, 403, "Bạn không có quyền thực hiện thao tác này.");
     }
     next();
   };

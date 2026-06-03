@@ -9,6 +9,7 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const { login } = useAuth();
@@ -18,12 +19,14 @@ const Login = () => {
     e.preventDefault();
     setError("");
     setNotice("");
+    setFieldErrors({});
     setLoading(true);
     try {
       const data = await authService.login({ email, password });
       login(data);
       navigate("/");
     } catch (err: any) {
+      if (err?.errors && typeof err.errors === "object") setFieldErrors(err.errors);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -38,9 +41,9 @@ const Login = () => {
     setResending(true);
     try {
       await authService.resendVerification(email);
-      setNotice("Da gui lai email xac nhan. Vui long kiem tra hop thu cua ban.");
+      setNotice("Đã gửi lại email xác nhận. Vui lòng kiểm tra hộp thư của bạn.");
     } catch (err: any) {
-      setError(err.message || "Khong the gui lai email xac nhan.");
+      setError(err.message || "Không thể gửi lại email xác nhận.");
     } finally {
       setResending(false);
     }
@@ -81,6 +84,7 @@ const Login = () => {
               />
               <Mail className="absolute left-3 top-3.5 text-gray-400 h-5 w-5" />
             </div>
+            {fieldErrors.email && <p className="text-xs font-medium text-red-600">{fieldErrors.email}</p>}
           </div>
 
           <div className="space-y-2">
@@ -96,6 +100,7 @@ const Login = () => {
               />
               <Lock className="absolute left-3 top-3.5 text-gray-400 h-5 w-5" />
             </div>
+            {fieldErrors.password && <p className="text-xs font-medium text-red-600">{fieldErrors.password}</p>}
           </div>
 
           <button
@@ -112,7 +117,7 @@ const Login = () => {
               onClick={handleResendVerification}
               className="w-full border border-indigo-200 text-indigo-700 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors disabled:opacity-50"
             >
-              {resending ? "Dang gui..." : "Gui lai email xac nhan"}
+              {resending ? "Đang gửi..." : "Gửi lại email xác nhận"}
             </button>
           )}
         </form>
