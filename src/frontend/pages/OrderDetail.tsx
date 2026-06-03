@@ -157,13 +157,25 @@ const OrderDetail = () => {
                 <span>Tạm tính</span>
                 <span>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}</span>
               </div>
+              {order.coupon_code && (
+                <>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Mã giảm giá</span>
+                    <span className="font-semibold text-gray-900">{order.coupon_code}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Giảm giá</span>
+                    <span className="font-semibold text-emerald-600">-{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.discount_amount || 0)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex justify-between text-gray-600">
                 <span>Phí vận chuyển</span>
                 <span className="text-green-600">Miễn phí</span>
               </div>
               <div className="pt-4 border-t flex justify-between text-xl font-bold text-indigo-600">
-                <span>Tổng cộng</span>
-                <span>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}</span>
+                <span>Tổng thanh toán</span>
+                <span>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.final_total ?? order.total_price)}</span>
               </div>
             </div>
           </div>

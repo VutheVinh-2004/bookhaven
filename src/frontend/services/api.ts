@@ -70,6 +70,14 @@ export const reviewService = {
   remove: (bookId: string) => fetchApi(`/books/${bookId}/reviews`, { method: "DELETE" }),
 };
 
+export const couponService = {
+  apply: (code: string) => fetchApi("/coupons/apply", { method: "POST", body: JSON.stringify({ code }) }),
+  adminList: () => fetchApi("/admin/coupons"),
+  adminCreate: (data: any) => fetchApi("/admin/coupons", { method: "POST", body: JSON.stringify(data) }),
+  adminUpdate: (id: number, data: any) => fetchApi(`/admin/coupons/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  adminDelete: (id: number) => fetchApi(`/admin/coupons/${id}`, { method: "DELETE" }),
+};
+
 export const cartService = {
   get: () => fetchApi("/cart"),
   add: (bookId: number, quantity: number = 1) => fetchApi("/cart", { method: "POST", body: JSON.stringify({ book_id: bookId, quantity }) }),

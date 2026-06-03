@@ -148,7 +148,7 @@ const PaymentTest = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-gray-50 rounded-xl p-4 border">
                 <div className="text-sm text-gray-500">Số tiền</div>
-                <div className="text-2xl font-bold text-indigo-600 mt-1">{formatCurrency(order.total_price)}</div>
+                <div className="text-2xl font-bold text-indigo-600 mt-1">{formatCurrency(order.final_total ?? order.total_price)}</div>
               </div>
               <div className="bg-gray-50 rounded-xl p-4 border">
                 <div className="text-sm text-gray-500">Phương thức</div>
@@ -208,7 +208,7 @@ const PaymentTest = () => {
 
                 <div className="bg-gray-50 border rounded-xl p-4 space-y-2 text-sm text-gray-600">
                   <p><span className="font-semibold text-gray-900">Đơn hàng:</span> #ORD-{order.id}</p>
-                  <p><span className="font-semibold text-gray-900">Số tiền:</span> {formatCurrency(order.total_price)}</p>
+                  <p><span className="font-semibold text-gray-900">Số tiền:</span> {formatCurrency(order.final_total ?? order.total_price)}</p>
                   <p><span className="font-semibold text-gray-900">Thẻ:</span> {maskCard(cardNumber)}</p>
                 </div>
 

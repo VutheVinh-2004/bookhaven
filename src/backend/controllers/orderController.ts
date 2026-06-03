@@ -3,6 +3,7 @@ import db from "../db/index.ts";
 import { AuthRequest } from "../middleware/auth.ts";
 import { fail, ok, created } from "../utils/response.ts";
 import { hasErrors, isNonEmptyString, isPhone, isPositiveInt, trimText, ValidationErrors } from "../utils/validation.ts";
+import { CouponValidationError, normalizeCouponCode, validateCoupon } from "../services/couponService.ts";
 
 export const getCart = (req: AuthRequest, res: Response) => {
   const items = db.prepare(`
@@ -86,6 +87,7 @@ export const createOrder = (req: AuthRequest, res: Response) => {
   const shippingAddress = trimText(req.body.shipping_address);
   const phone = trimText(req.body.phone);
   const paymentMethod = trimText(req.body.payment_method) || "cod";
+  const couponCode = normalizeCouponCode(req.body.coupon_code);
   const allowedPaymentMethods = ["cod", "card"];
   const errors: ValidationErrors = {};
 
@@ -111,10 +113,16 @@ export const createOrder = (req: AuthRequest, res: Response) => {
     const totalPrice = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
     const paymentStatus = paymentMethod === "cod" ? "unpaid" : "pending";
     const transaction = db.transaction(() => {
+      const couponResult = couponCode ? validateCoupon(couponCode, Number(userId), totalPrice) : null;
+      const discountAmount = couponResult?.discount_amount || 0;
+      const finalTotal = couponResult?.final_total ?? totalPrice;
       const orderResult = db.prepare(`
-        INSERT INTO orders (user_id, total_price, shipping_address, phone, payment_method, payment_status)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(userId, totalPrice, shippingAddress, phone, paymentMethod, paymentStatus);
+        INSERT INTO orders (
+          user_id, total_price, coupon_code, discount_amount, final_total,
+          shipping_address, phone, payment_method, payment_status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, totalPrice, couponResult?.code || null, discountAmount, finalTotal, shippingAddress, phone, paymentMethod, paymentStatus);
       const orderId = orderResult.lastInsertRowid;
       const insertOrderItem = db.prepare("INSERT INTO order_items (order_id, book_id, quantity, price) VALUES (?, ?, ?, ?)");
       const updateStock = db.prepare("UPDATE books SET stock = stock - ? WHERE id = ? AND stock >= ?");
@@ -124,6 +132,14 @@ export const createOrder = (req: AuthRequest, res: Response) => {
         const result = updateStock.run(item.quantity, item.book_id, item.quantity);
         if (result.changes === 0) throw new Error(`Sách "${item.title}" không đủ hàng.`);
       }
+      if (couponResult) {
+        const couponUpdate = db.prepare(`
+          UPDATE coupons
+          SET used_count = used_count + 1, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ? AND (usage_limit IS NULL OR used_count < usage_limit)
+        `).run(couponResult.coupon.id);
+        if (couponUpdate.changes === 0) throw new CouponValidationError("Mã giảm giá đã hết lượt sử dụng.");
+      }
       db.prepare("DELETE FROM cart_items WHERE user_id = ?").run(userId);
       return orderId;
     });
@@ -131,6 +147,7 @@ export const createOrder = (req: AuthRequest, res: Response) => {
     return created(res, { id: transaction() }, "Đặt hàng thành công.");
   } catch (error: any) {
     console.error("Create order error:", error);
+    if (error instanceof CouponValidationError) return fail(res, 400, error.message, { coupon_code: error.message });
     return fail(res, 400, error.message || "Lỗi tạo đơn hàng.");
   }
 };
@@ -177,8 +194,8 @@ export const cancelMyOrder = (req: AuthRequest, res: Response) => {
   if (!isPositiveInt(req.params.id)) return fail(res, 400, "ID đơn hàng không hợp lệ.");
 
   const order = db.prepare(
-    "SELECT id, user_id, status, payment_status FROM orders WHERE id = ?"
-  ).get(req.params.id) as { id: number; user_id: number; status: string; payment_status: string } | undefined;
+    "SELECT id, user_id, status, payment_status, coupon_code FROM orders WHERE id = ?"
+  ).get(req.params.id) as { id: number; user_id: number; status: string; payment_status: string; coupon_code: string | null } | undefined;
 
   if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
   if (order.user_id !== req.user?.id) return fail(res, 403, "Bạn không có quyền hủy đơn hàng này.");
@@ -201,6 +218,9 @@ export const cancelMyOrder = (req: AuthRequest, res: Response) => {
       }
 
       db.prepare("UPDATE orders SET status = 'cancelled', payment_status = 'cancelled' WHERE id = ?").run(order.id);
+      if (order.coupon_code) {
+        db.prepare("UPDATE coupons SET used_count = MAX(used_count - 1, 0), updated_at = CURRENT_TIMESTAMP WHERE code = ?").run(order.coupon_code);
+      }
     });
 
     transaction();
@@ -226,7 +246,7 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
   const allowed = ["pending", "processing", "shipped", "delivered", "cancelled"];
   if (!allowed.includes(status)) return fail(res, 400, "Trạng thái đơn hàng không hợp lệ.");
 
-  const order = db.prepare("SELECT id, status, payment_method, payment_status FROM orders WHERE id = ?").get(req.params.id) as { id: number; status: string; payment_method: string; payment_status: string } | undefined;
+  const order = db.prepare("SELECT id, status, payment_method, payment_status, coupon_code FROM orders WHERE id = ?").get(req.params.id) as { id: number; status: string; payment_method: string; payment_status: string; coupon_code: string | null } | undefined;
   if (!order) return fail(res, 404, "Không tìm thấy đơn hàng.");
 
   if (order.status === status) {
@@ -264,6 +284,9 @@ export const updateOrderStatus = (req: AuthRequest, res: Response) => {
         for (const item of orderItems) {
           restoreStock.run(item.quantity, item.book_id);
         }
+        if (order.coupon_code) {
+          db.prepare("UPDATE coupons SET used_count = MAX(used_count - 1, 0), updated_at = CURRENT_TIMESTAMP WHERE code = ?").run(order.coupon_code);
+        }
       }
 
       db.prepare("UPDATE orders SET status = ?, payment_status = CASE WHEN ? = 'cancelled' THEN 'cancelled' ELSE payment_status END WHERE id = ?").run(status, status, req.params.id);
@@ -285,7 +308,7 @@ export const getAdminStats = (req: AuthRequest, res: Response) => {
   const allowedPeriods = ["7d", "30d", "12m"];
   const selectedPeriod = allowedPeriods.includes(period) ? period : "7d";
 
-  const totalRevenue = db.prepare("SELECT COALESCE(SUM(total_price), 0) as total FROM orders WHERE payment_status = 'paid'").get() as any;
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(COALESCE(final_total, total_price)), 0) as total FROM orders WHERE payment_status = 'paid'").get() as any;
   const pendingOrders = db.prepare("SELECT COUNT(*) as count FROM orders WHERE status IN ('pending', 'processing')").get() as any;
   const totalUsers = db.prepare("SELECT COUNT(*) as count FROM users WHERE role = 'user' AND is_active = 1").get() as any;
   const totalBooks = db.prepare("SELECT COUNT(*) as count FROM books").get() as any;
@@ -293,14 +316,14 @@ export const getAdminStats = (req: AuthRequest, res: Response) => {
 
   const revenueByPeriod = selectedPeriod === "12m"
     ? db.prepare(`
-      SELECT strftime('%Y-%m', paid_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      SELECT strftime('%Y-%m', paid_at) as label, COALESCE(SUM(COALESCE(final_total, total_price)), 0) as revenue
       FROM orders
       WHERE payment_status = 'paid' AND paid_at IS NOT NULL AND date(paid_at) >= date('now', '-11 months', 'start of month')
       GROUP BY strftime('%Y-%m', paid_at)
       ORDER BY label
     `).all()
     : db.prepare(`
-      SELECT date(paid_at) as label, COALESCE(SUM(total_price), 0) as revenue
+      SELECT date(paid_at) as label, COALESCE(SUM(COALESCE(final_total, total_price)), 0) as revenue
       FROM orders
       WHERE payment_status = 'paid' AND paid_at IS NOT NULL
         AND date(paid_at) >= date('now', ?)
@@ -323,7 +346,7 @@ export const getAdminStats = (req: AuthRequest, res: Response) => {
     : top5Categories;
 
   const recentOrders = db.prepare(`
-    SELECT o.id, o.total_price, o.status, o.created_at, o.phone,
+    SELECT o.id, o.total_price, o.final_total, o.status, o.created_at, o.phone,
            u.full_name as user_name
     FROM orders o
     JOIN users u ON o.user_id = u.id

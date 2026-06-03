@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { bookService, orderService, userService } from "../services/api.ts";
+import { bookService, couponService, orderService, userService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { useToast } from "../context/ToastContext.tsx";
-import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw, Shield, UserPlus } from "lucide-react";
+import { Plus, Edit2, Trash2, Package, Book as BookIcon, LayoutDashboard, Check, X, ChevronRight, TrendingUp, Users, ShoppingBag, DollarSign, Clock, MapPin, Phone, RefreshCw, Shield, UserPlus, TicketPercent } from "lucide-react";
 import { useNavigate, Routes, Route, Link } from "react-router-dom";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
@@ -135,7 +135,7 @@ const AdminOverview = () => {
                   <td className="px-6 py-4 text-sm font-semibold text-indigo-600">#ORD-{order.id}</td>
                   <td className="px-6 py-4 text-sm text-gray-700 font-medium">{order.user_name}</td>
                   <td className="px-6 py-4 text-sm text-gray-600">{new Date(order.created_at).toLocaleDateString("vi-VN")}</td>
-                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">{formatCurrency(order.total_price)}</td>
+                  <td className="px-6 py-4 text-sm font-semibold text-gray-900">{formatCurrency(order.final_total ?? order.total_price)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${getStatusBadgeClass(order.status)}`}>{getStatusText(order.status)}</span>
                   </td>
@@ -567,7 +567,7 @@ const AdminOrders = () => {
     delivering: orders.filter(order => order.status === "shipped").length,
     revenue: orders
       .filter(order => order.payment_status === "paid")
-      .reduce((sum, order) => sum + Number(order.total_price || 0), 0),
+      .reduce((sum, order) => sum + Number(order.final_total ?? order.total_price ?? 0), 0),
   };
 
   return (
@@ -661,7 +661,7 @@ const AdminOrders = () => {
                       <td className="px-5 py-4">
                         <div className="font-bold text-gray-950">#ORD-{order.id}</div>
                         <div className="mt-1 text-xs text-gray-500">{formatDate(order.created_at)}</div>
-                        <div className="mt-2 font-bold text-indigo-600">{formatCurrency(order.total_price)}</div>
+                        <div className="mt-2 font-bold text-indigo-600">{formatCurrency(order.final_total ?? order.total_price)}</div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="max-w-[220px] truncate font-semibold text-gray-900">{order.user_name || order.user_email}</div>
@@ -848,6 +848,169 @@ const AdminCategories = () => {
   );
 };
 
+const emptyCouponForm = {
+  code: "", type: "percent", value: "", min_order_amount: "0", max_discount_amount: "",
+  usage_limit: "", start_date: "", end_date: "", is_active: true
+};
+
+const AdminCoupons = () => {
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editingCoupon, setEditingCoupon] = useState<any>(null);
+  const [form, setForm] = useState<any>(emptyCouponForm);
+  const [showCouponForm, setShowCouponForm] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const { showToast } = useToast();
+  const formatCouponCurrency = (value: number) => new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(value || 0);
+  const formatCouponDateInput = (value?: string) =>
+    value ? new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)) : "";
+  const toCouponDatePayload = (value: string) => {
+    const trimmed = value.trim();
+    const match = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return trimmed || null;
+    const [, day, month, year] = match;
+    return `${year}-${month}-${day}`;
+  };
+
+  const fetchCoupons = () => {
+    setLoading(true);
+    couponService.adminList()
+      .then(setCoupons)
+      .catch((err: any) => showToast(err.message || "Không thể tải mã giảm giá.", "error"))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    fetchCoupons();
+  }, []);
+
+  const openForm = (coupon?: any) => {
+    setShowCouponForm(true);
+    setEditingCoupon(coupon || null);
+    setFieldErrors({});
+    setForm(coupon ? {
+      code: coupon.code,
+      type: coupon.type,
+      value: String(coupon.value),
+      min_order_amount: String(coupon.min_order_amount || 0),
+      max_discount_amount: coupon.max_discount_amount ?? "",
+      usage_limit: coupon.usage_limit ?? "",
+      start_date: formatCouponDateInput(coupon.start_date),
+      end_date: formatCouponDateInput(coupon.end_date),
+      is_active: Boolean(coupon.is_active)
+    } : emptyCouponForm);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFieldErrors({});
+    const payload = {
+      ...form,
+      code: form.code.trim().toUpperCase(),
+      value: Number(form.value),
+      min_order_amount: Number(form.min_order_amount || 0),
+      max_discount_amount: form.max_discount_amount === "" ? null : Number(form.max_discount_amount),
+      usage_limit: form.usage_limit === "" ? null : Number(form.usage_limit),
+      start_date: toCouponDatePayload(form.start_date),
+      end_date: toCouponDatePayload(form.end_date)
+    };
+    try {
+      if (editingCoupon) await couponService.adminUpdate(editingCoupon.id, payload);
+      else await couponService.adminCreate(payload);
+      showToast(editingCoupon ? "Đã cập nhật mã giảm giá." : "Đã tạo mã giảm giá.", "success");
+      setEditingCoupon(null);
+      setForm(emptyCouponForm);
+      setShowCouponForm(false);
+      fetchCoupons();
+    } catch (err: any) {
+      if (err?.errors) setFieldErrors(err.errors);
+      showToast(err.message || "Không thể lưu mã giảm giá.", "error");
+    }
+  };
+
+  const handleDisable = async (id: number) => {
+    if (!window.confirm("Tắt mã giảm giá này?")) return;
+    try {
+      await couponService.adminDelete(id);
+      showToast("Đã tắt mã giảm giá.", "success");
+      fetchCoupons();
+    } catch (err: any) {
+      showToast(err.message || "Không thể tắt mã giảm giá.", "error");
+    }
+  };
+
+  const setField = (name: string, value: any) => setForm((current: any) => ({ ...current, [name]: value }));
+  const formatDate = (value?: string) =>
+    value ? new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value)) : "-";
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Mã giảm giá</h2>
+          <p className="mt-1 text-sm text-gray-500">Tạo và quản lý ưu đãi cho đơn hàng.</p>
+        </div>
+        <button type="button" onClick={() => openForm()} className="flex items-center justify-center rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">
+          <Plus className="mr-2 h-4 w-4" /> Thêm mã
+        </button>
+      </div>
+
+      <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white shadow-sm">
+        <table className="w-full min-w-[1100px] text-left">
+          <thead className="bg-gray-50">
+            <tr>
+              {["Mã", "Loại", "Giá trị", "Đơn tối thiểu", "Giảm tối đa", "Lượt dùng", "Bắt đầu", "Kết thúc", "Trạng thái", "Thao tác"].map((label) => (
+                <th key={label} className="px-4 py-3 text-xs font-semibold uppercase text-gray-500">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {coupons.map((coupon) => (
+              <tr key={coupon.id} className="hover:bg-gray-50">
+                <td className="px-4 py-4 font-bold text-indigo-700">{coupon.code}</td>
+                <td className="px-4 py-4 text-sm text-gray-600">{coupon.type === "percent" ? "Phần trăm" : "Cố định"}</td>
+                <td className="px-4 py-4 text-sm font-semibold text-gray-900">{coupon.type === "percent" ? `${coupon.value}%` : formatCouponCurrency(coupon.value)}</td>
+                <td className="px-4 py-4 text-sm text-gray-600">{formatCouponCurrency(coupon.min_order_amount || 0)}</td>
+                <td className="px-4 py-4 text-sm text-gray-600">{coupon.max_discount_amount === null ? "-" : formatCouponCurrency(coupon.max_discount_amount)}</td>
+                <td className="px-4 py-4 text-sm text-gray-600">{coupon.used_count}/{coupon.usage_limit ?? "∞"}</td>
+                <td className="px-4 py-4 text-xs text-gray-500">{formatDate(coupon.start_date)}</td>
+                <td className="px-4 py-4 text-xs text-gray-500">{formatDate(coupon.end_date)}</td>
+                <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${coupon.is_active ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>{coupon.is_active ? "Đang hoạt động" : "Đã tắt"}</span></td>
+                <td className="px-4 py-4">
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => openForm(coupon)} className="rounded-lg p-2 text-blue-600 hover:bg-blue-50" aria-label="Sửa mã" title="Sửa mã"><Edit2 size={17} /></button>
+                    {coupon.is_active ? <button type="button" onClick={() => handleDisable(coupon.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label="Tắt mã" title="Tắt mã"><Trash2 size={17} /></button> : null}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {!loading && coupons.length === 0 && <p className="p-8 text-center text-sm text-gray-500">Chưa có mã giảm giá nào.</p>}
+        {loading && <p className="p-8 text-center text-sm text-gray-500">Đang tải mã giảm giá...</p>}
+      </div>
+
+      {showCouponForm && (
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <h3 className="text-lg font-bold text-gray-900">{editingCoupon ? "Cập nhật mã giảm giá" : "Tạo mã giảm giá"}</h3>
+          <form onSubmit={handleSubmit} className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div><label className="text-sm font-semibold">Mã</label><input value={form.code} maxLength={30} onChange={(e) => setField("code", e.target.value.toUpperCase())} className="mt-1 w-full rounded-lg border p-2" />{fieldErrors.code && <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>}</div>
+            <div><label className="text-sm font-semibold">Loại giảm</label><select value={form.type} onChange={(e) => setField("type", e.target.value)} className="mt-1 w-full rounded-lg border p-2"><option value="percent">Phần trăm</option><option value="fixed">Cố định</option></select></div>
+            <div><label className="text-sm font-semibold">Giá trị</label><input type="number" min="0" step="0.01" value={form.value} onChange={(e) => setField("value", e.target.value)} className="mt-1 w-full rounded-lg border p-2" />{fieldErrors.value && <p className="mt-1 text-xs text-red-600">{fieldErrors.value}</p>}</div>
+            <div><label className="text-sm font-semibold">Đơn tối thiểu</label><input type="number" min="0" value={form.min_order_amount} onChange={(e) => setField("min_order_amount", e.target.value)} className="mt-1 w-full rounded-lg border p-2" /></div>
+            <div><label className="text-sm font-semibold">Giảm tối đa</label><input type="number" min="0" value={form.max_discount_amount} onChange={(e) => setField("max_discount_amount", e.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Để trống nếu không giới hạn" /></div>
+            <div><label className="text-sm font-semibold">Giới hạn lượt dùng</label><input type="number" min="1" value={form.usage_limit} onChange={(e) => setField("usage_limit", e.target.value)} className="mt-1 w-full rounded-lg border p-2" placeholder="Để trống nếu không giới hạn" /></div>
+            <div><label className="text-sm font-semibold">Bắt đầu</label><input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" value={form.start_date} onChange={(e) => setField("start_date", e.target.value)} className="mt-1 w-full rounded-lg border p-2" />{fieldErrors.start_date && <p className="mt-1 text-xs text-red-600">{fieldErrors.start_date}</p>}</div>
+            <div><label className="text-sm font-semibold">Kết thúc</label><input type="text" inputMode="numeric" placeholder="dd/mm/yyyy" value={form.end_date} onChange={(e) => setField("end_date", e.target.value)} className="mt-1 w-full rounded-lg border p-2" />{fieldErrors.end_date && <p className="mt-1 text-xs text-red-600">{fieldErrors.end_date}</p>}</div>
+            <label className="flex items-center gap-2 text-sm font-semibold"><input type="checkbox" checked={form.is_active} onChange={(e) => setField("is_active", e.target.checked)} /> Đang hoạt động</label>
+            <div className="flex gap-3 md:col-span-2 xl:col-span-4"><button type="submit" className="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-indigo-700">Lưu mã</button><button type="button" onClick={() => { setEditingCoupon(null); setForm(emptyCouponForm); setShowCouponForm(false); }} className="rounded-lg border px-5 py-2.5 text-sm font-bold text-gray-700">Hủy</button></div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AdminUsers = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1010,6 +1173,9 @@ const AdminDashboard = () => {
         <Link to="/admin/users" className="flex items-center space-x-3 p-3 rounded-xl hover:bg-indigo-50 text-gray-700 font-medium">
           <Users size={20} /> <span>Quản lý người dùng</span>
         </Link>
+        <Link to="/admin/coupons" className="flex items-center space-x-3 p-3 rounded-xl hover:bg-indigo-50 text-gray-700 font-medium">
+          <TicketPercent size={20} /> <span>Mã giảm giá</span>
+        </Link>
       </aside>
       <div className="flex-grow">
         <Routes>
@@ -1017,6 +1183,7 @@ const AdminDashboard = () => {
           <Route path="/books" element={<AdminBooks />} />
           <Route path="/orders" element={<AdminOrders />} />
           <Route path="/users" element={<AdminUsers />} />
+          <Route path="/coupons" element={<AdminCoupons />} />
         </Routes>
       </div>
     </div>

@@ -132,7 +132,7 @@ const MyOrders = () => {
                   <div className="text-right">
                     <div className="text-sm text-gray-500">Tổng cộng</div>
                     <div className="font-bold text-indigo-600">
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.total_price)}
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(order.final_total ?? order.total_price)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 bg-gray-50 px-4 py-2 rounded-xl border">

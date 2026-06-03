@@ -11,7 +11,7 @@ import {
   Trash2,
   Truck,
 } from "lucide-react";
-import { cartService, orderService } from "../services/api.ts";
+import { cartService, couponService, orderService } from "../services/api.ts";
 import { useAuth } from "../context/AuthContext.tsx";
 import { useToast } from "../context/ToastContext.tsx";
 import { isValidVietnamPhone } from "../utils/validation.ts";
@@ -64,6 +64,10 @@ const Cart = () => {
   const [provinces, setProvinces] = useState<Province[]>([]);
   const [addressLoading, setAddressLoading] = useState(true);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [couponCode, setCouponCode] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discount_amount: number; final_total: number } | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
   const { user } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
@@ -108,6 +112,8 @@ const Cart = () => {
     if (q < 1) return;
     try {
       await cartService.update(id, q);
+      setAppliedCoupon(null);
+      setCouponError("");
       fetchCart();
     } catch (err: any) {
       showToast(err.message || "Không thể cập nhật số lượng.", "error");
@@ -135,6 +141,8 @@ const Cart = () => {
   const removeItem = async (id: number) => {
     try {
       await cartService.remove(id);
+      setAppliedCoupon(null);
+      setCouponError("");
       fetchCart();
     } catch (err: any) {
       showToast(err.message || "Không thể xóa sản phẩm.", "error");
@@ -165,7 +173,12 @@ const Cart = () => {
 
     setOrdering(true);
     try {
-      const order = await orderService.create({ shipping_address: normalizedAddress, phone: normalizedPhone, payment_method: paymentMethod });
+      const order = await orderService.create({
+        shipping_address: normalizedAddress,
+        phone: normalizedPhone,
+        payment_method: paymentMethod,
+        coupon_code: appliedCoupon?.code || undefined
+      });
       if (paymentMethod === "cod") {
         showToast("Đặt hàng thành công.", "success");
         navigate("/orders");
@@ -177,8 +190,10 @@ const Cart = () => {
         setFieldErrors({
           streetAddress: err.errors.shipping_address,
           phone: err.errors.phone,
-          paymentMethod: err.errors.payment_method
+          paymentMethod: err.errors.payment_method,
+          couponCode: err.errors.coupon_code
         });
+        if (err.errors.coupon_code) setCouponError(err.errors.coupon_code);
       }
       showToast(err.message || "Không thể tạo đơn hàng.", "error");
     } finally {
@@ -187,11 +202,29 @@ const Cart = () => {
   };
 
   const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const discountAmount = appliedCoupon?.discount_amount || 0;
+  const finalTotal = appliedCoupon?.final_total ?? total;
   const hasAddressDirectory = provinces.length > 0;
   const selectedProvince = provinces.find((p) => p.name === province);
   const districts = selectedProvince?.districts || [];
   const selectedDistrict = districts.find((d) => d.name === district);
   const wards = selectedDistrict?.wards || [];
+
+  const handleApplyCoupon = async () => {
+    setCouponError("");
+    setApplyingCoupon(true);
+    try {
+      const result = await couponService.apply(couponCode);
+      setAppliedCoupon(result);
+      setCouponCode(result.code);
+      showToast(result.message || "Áp dụng mã giảm giá thành công.", "success");
+    } catch (err: any) {
+      setAppliedCoupon(null);
+      setCouponError(err?.errors?.code || err.message || "Không thể áp dụng mã giảm giá.");
+    } finally {
+      setApplyingCoupon(false);
+    }
+  };
 
   if (!user) {
     return (
@@ -457,17 +490,43 @@ const Cart = () => {
               </h3>
 
               <div className="space-y-3">
+                <div className="space-y-2 border-b border-gray-100 pb-4">
+                  <label htmlFor="coupon-code" className="text-sm font-bold text-gray-700">Mã giảm giá</label>
+                  <div className="flex gap-2">
+                    <input
+                      id="coupon-code"
+                      maxLength={30}
+                      value={couponCode}
+                      onChange={(e) => {
+                        setCouponCode(e.target.value.toUpperCase());
+                        setCouponError("");
+                        setAppliedCoupon(null);
+                      }}
+                      placeholder="Nhập mã giảm giá"
+                      className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm uppercase outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+                    />
+                    <button type="button" onClick={handleApplyCoupon} disabled={applyingCoupon || !couponCode.trim()} className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-bold text-white hover:bg-gray-800 disabled:opacity-50">
+                      {applyingCoupon ? "Đang áp dụng..." : "Áp dụng"}
+                    </button>
+                  </div>
+                  {couponError && <p className="text-xs font-medium text-red-600">{couponError}</p>}
+                  {appliedCoupon && <p className="text-xs font-semibold text-emerald-600">Đã áp dụng mã {appliedCoupon.code}</p>}
+                </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Tạm tính</span>
                   <span>{formatCurrency(total)}</span>
+                </div>
+                <div className="flex justify-between text-gray-600">
+                  <span>Giảm giá</span>
+                  <span className={discountAmount > 0 ? "font-semibold text-emerald-600" : ""}>-{formatCurrency(discountAmount)}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span className="flex items-center"><Truck className="h-4 w-4 mr-1" /> Phí vận chuyển</span>
                   <span className="text-emerald-600 font-semibold">Miễn phí</span>
                 </div>
                 <div className="pt-4 border-t flex justify-between text-xl font-bold text-gray-950">
-                  <span>Tổng cộng</span>
-                  <span className="text-indigo-600">{formatCurrency(total)}</span>
+                  <span>Tổng thanh toán</span>
+                  <span className="text-indigo-600">{formatCurrency(finalTotal)}</span>
                 </div>
               </div>
 

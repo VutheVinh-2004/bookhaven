@@ -1,6 +1,7 @@
 import express from "express";
 import * as authController from "../controllers/authController.ts";
 import * as bookController from "../controllers/bookController.ts";
+import * as couponController from "../controllers/couponController.ts";
 import * as orderController from "../controllers/orderController.ts";
 import * as reviewController from "../controllers/reviewController.ts";
 import * as userController from "../controllers/userController.ts";
@@ -35,6 +36,7 @@ router.get("/orders/:id", authenticateToken, orderController.getOrderDetails);
 router.get("/books/:id/reviews/eligibility", authenticateToken, reviewController.getMyReviewEligibility);
 router.post("/books/:id/reviews", authenticateToken, reviewController.upsertMyReview);
 router.delete("/books/:id/reviews", authenticateToken, reviewController.deleteMyReview);
+router.post("/coupons/apply", authenticateToken, couponController.applyCoupon);
 
 router.post("/admin/categories", authenticateToken, authorizeRoles("admin"), bookController.createCategory);
 router.put("/admin/categories/:id", authenticateToken, authorizeRoles("admin"), bookController.updateCategory);
@@ -49,5 +51,9 @@ router.get("/admin/users", authenticateToken, authorizeRoles("admin"), userContr
 router.put("/admin/users/:id/role", authenticateToken, authorizeRoles("admin"), userController.updateUserRole);
 router.put("/admin/users/:id/reactivate", authenticateToken, authorizeRoles("admin"), userController.reactivateUser);
 router.delete("/admin/users/:id", authenticateToken, authorizeRoles("admin"), userController.deleteUser);
+router.get("/admin/coupons", authenticateToken, authorizeRoles("admin"), couponController.getCoupons);
+router.post("/admin/coupons", authenticateToken, authorizeRoles("admin"), couponController.createCoupon);
+router.put("/admin/coupons/:id", authenticateToken, authorizeRoles("admin"), couponController.updateCoupon);
+router.delete("/admin/coupons/:id", authenticateToken, authorizeRoles("admin"), couponController.deleteCoupon);
 
 export default router;

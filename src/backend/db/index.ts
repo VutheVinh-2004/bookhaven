@@ -93,6 +93,9 @@ export function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL,
       total_price REAL NOT NULL CHECK(total_price > 0),
+      coupon_code TEXT,
+      discount_amount REAL NOT NULL DEFAULT 0 CHECK(discount_amount >= 0),
+      final_total REAL CHECK(final_total >= 0),
       status TEXT CHECK(status IN ('pending', 'processing', 'shipped', 'delivered', 'cancelled')) DEFAULT 'pending',
       shipping_address TEXT,
       phone TEXT,
@@ -121,6 +124,16 @@ export function initDb() {
   if (!hasColumn("orders", "paid_at")) {
     db.exec("ALTER TABLE orders ADD COLUMN paid_at DATETIME");
   }
+  if (!hasColumn("orders", "coupon_code")) {
+    db.exec("ALTER TABLE orders ADD COLUMN coupon_code TEXT");
+  }
+  if (!hasColumn("orders", "discount_amount")) {
+    db.exec("ALTER TABLE orders ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0");
+  }
+  if (!hasColumn("orders", "final_total")) {
+    db.exec("ALTER TABLE orders ADD COLUMN final_total REAL");
+  }
+  db.prepare("UPDATE orders SET final_total = total_price WHERE final_total IS NULL").run();
   db.prepare("UPDATE orders SET paid_at = created_at WHERE payment_status = 'paid' AND paid_at IS NULL").run();
 
   // Order Items table
@@ -170,6 +183,25 @@ export function initDb() {
     ON book_reviews (book_id, created_at DESC)
   `);
 
+  // Coupons table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      type TEXT CHECK(type IN ('percent', 'fixed')) NOT NULL,
+      value REAL NOT NULL CHECK(value > 0),
+      min_order_amount REAL DEFAULT 0 CHECK(min_order_amount >= 0),
+      max_discount_amount REAL CHECK(max_discount_amount IS NULL OR max_discount_amount >= 0),
+      usage_limit INTEGER CHECK(usage_limit IS NULL OR usage_limit >= 1),
+      used_count INTEGER NOT NULL DEFAULT 0 CHECK(used_count >= 0),
+      start_date DATETIME,
+      end_date DATETIME,
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // Protect existing databases that were created before CHECK constraints were added.
   db.exec(`
     CREATE TRIGGER IF NOT EXISTS validate_books_insert
@@ -209,9 +241,23 @@ export function initDb() {
 
     CREATE TRIGGER IF NOT EXISTS validate_orders_insert
     BEFORE INSERT ON orders
-    WHEN NEW.total_price <= 0
+    WHEN NEW.total_price <= 0 OR NEW.discount_amount < 0 OR NEW.final_total < 0
     BEGIN
       SELECT RAISE(ABORT, 'Invalid order total');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_orders_discount_update
+    BEFORE UPDATE OF total_price, discount_amount, final_total ON orders
+    WHEN NEW.total_price <= 0 OR NEW.discount_amount < 0 OR NEW.final_total < 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid order total');
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS validate_order_discounts_insert
+    BEFORE INSERT ON orders
+    WHEN NEW.discount_amount < 0 OR NEW.final_total < 0
+    BEGIN
+      SELECT RAISE(ABORT, 'Invalid order discount');
     END;
 
     CREATE TRIGGER IF NOT EXISTS validate_book_reviews_insert

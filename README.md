@@ -30,6 +30,7 @@ BookHaven là ứng dụng bán sách trực tuyến full-stack, hỗ trợ ngư
 - Quên mật khẩu và đặt lại mật khẩu bằng mã OTP gửi qua Gmail.
 - Tìm kiếm, lọc theo danh mục và xem chi tiết sách.
 - Thêm sách vào giỏ hàng, thay đổi số lượng và đặt hàng.
+- Áp dụng mã giảm giá do admin cấp khi thanh toán.
 - Chọn thanh toán khi nhận hàng hoặc thanh toán thẻ mô phỏng.
 - Xem lịch sử, chi tiết và hủy đơn hàng chưa thanh toán trước khi giao.
 - Cập nhật thông tin cá nhân và mật khẩu.
@@ -37,6 +38,7 @@ BookHaven là ứng dụng bán sách trực tuyến full-stack, hỗ trợ ngư
 ### Admin
 
 - Quản lý sách và danh mục.
+- Tạo, cập nhật và tắt mã giảm giá.
 - Quản lý trạng thái đơn hàng theo đúng luồng xử lý.
 - Chỉ giao đơn thanh toán online sau khi đơn đã được thanh toán.
 - Xem thống kê doanh thu dựa trên số tiền đã thanh toán.
